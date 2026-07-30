@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LINEUP CARD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Big+Shoulders+Display:wght@500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --night:#122A20; --turf:#1C3B2D;
+  --chalk:#F2EDE0; --chalk-dim:rgba(242,237,224,.42); --chalk-faint:rgba(242,237,224,.15);
+  --ink:#17140F; --ink-soft:rgba(23,20,15,.55);
+  --bulb:#FFB347; --bulb-hot:#FFCE7A;
+  --clay:#B4764A; --clay-deep:#8C5836;
+  --out:#E8503A; --walk:#78B7FF; --single:#E3C48D; --xtra:#FFB347; --homer:#FFF0CE;
+  --good:#5ED89A;
+  --shadow:rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1400px 700px at 50% -14%, rgba(255,214,140,.13), transparent 62%),
+    repeating-linear-gradient(90deg, var(--turf) 0 104px, var(--night) 104px 208px);
+  color:var(--chalk);font-family:'IBM Plex Mono',ui-monospace,monospace;
+  font-size:13px;line-height:1.4;overflow-x:hidden;min-height:100vh;
+}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:80}
+body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes shake{10%,90%{transform:translate(-2px,1px)}20%,80%{transform:translate(4px,-2px)}
+  30%,50%,70%{transform:translate(-7px,3px)}40%,60%{transform:translate(6px,-3px)}}
+.wrap{max-width:1920px;margin:0 auto;padding:18px 30px 26px}
+
+/* ================= how it works ================= */
+.rules{
+  display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:0;
+  border:2px solid var(--chalk-faint);border-radius:10px;overflow:hidden;margin-bottom:16px;
+  background:rgba(10,20,14,.45);
+}
+.rules-tag{
+  background:var(--chalk);color:var(--ink);padding:12px 16px;display:flex;align-items:center;
+  font-family:'Alfa Slab One',serif;font-size:.82rem;line-height:1.15;max-width:150px;
+}
+.rule{padding:11px 16px;border-left:1px solid var(--chalk-faint);display:flex;gap:11px;align-items:flex-start}
+.rule .num{
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.5rem;line-height:.9;
+  color:var(--bulb);flex:0 0 auto;
+}
+.rule .txt{font-size:10.5px;line-height:1.55;color:var(--chalk-dim)}
+.rule .txt b{color:var(--chalk);font-weight:600}
+
+/* ================= top: opponent + scoreboard ================= */
+.topbar{display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:20px;margin-bottom:16px}
+.opp{
+  background:linear-gradient(180deg,#20221E,#141719);border:3px solid var(--bulb);border-radius:14px;
+  padding:14px 22px 16px;box-shadow:0 10px 30px var(--shadow), inset 0 0 40px rgba(255,179,71,.09);
+  display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:24px;align-items:center;
+}
+.opp-eyebrow{font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:var(--bulb)}
+.opp-name{font-family:'Alfa Slab One',serif;font-size:2.5rem;line-height:1.02;margin:3px 0 2px;
+  text-shadow:0 0 22px rgba(255,179,71,.3)}
+.opp-sub{font-size:10.5px;color:var(--chalk-dim);font-style:italic;margin-bottom:11px}
+.matchups{display:flex;flex-direction:column;gap:6px}
+.mu{display:grid;grid-template-columns:150px 1fr 34px;gap:10px;align-items:center;font-size:9.5px;letter-spacing:.04em}
+.mu .mu-l{color:var(--chalk-dim);text-align:right}
+.mu .mu-l b{color:var(--chalk)}
+.mu .mu-bar{height:8px;border-radius:4px;background:rgba(242,237,224,.12);overflow:hidden}
+.mu .mu-bar i{display:block;height:100%;background:var(--out);border-radius:4px}
+.mu .mu-v{font-weight:600;font-size:11px}
+.target-box{
+  border:2px dashed var(--bulb);border-radius:10px;padding:12px 14px;text-align:center;
+  background:rgba(255,179,71,.09);
+}
+.target-lbl{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--bulb)}
+.target-num{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:3.6rem;line-height:.82;color:var(--bulb);
+  text-shadow:0 0 20px rgba(255,179,71,.5);margin:4px 0 2px}
+.target-note{font-size:9.5px;color:var(--chalk-dim);line-height:1.5}
+
+.scoreboard{
+  display:flex;gap:22px;align-items:center;justify-content:space-around;
+  background:#0B1D14;border:3px solid var(--chalk);border-radius:14px;padding:12px 20px;
+  box-shadow:0 10px 30px var(--shadow), inset 0 0 34px rgba(0,0,0,.5);
+}
+.sb-cell{text-align:center}
+.sb-lbl{font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--chalk-dim);margin-bottom:5px}
+.sb-runs{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:4rem;line-height:.8;
+  color:var(--bulb);text-shadow:0 0 18px rgba(255,179,71,.6);font-variant-numeric:tabular-nums}
+.sb-runs.pop{animation:runpop .45s cubic-bezier(.2,1.7,.4,1)}
+@keyframes runpop{35%{transform:scale(1.3);text-shadow:0 0 34px rgba(255,206,122,.95)}}
+.sb-need{font-size:9.5px;color:var(--chalk-dim);margin-top:3px}
+.sb-need b{color:var(--chalk)}
+.outs{display:flex;gap:6px;justify-content:center}
+.out-pip{width:17px;height:17px;border-radius:50%;border:2px solid rgba(232,80,58,.45);transition:all .18s}
+.out-pip.on{background:var(--out);border-color:var(--out);box-shadow:0 0 14px rgba(232,80,58,.8)}
+.inn-strip{display:flex;gap:5px;justify-content:center}
+.inn-pip{width:22px;height:8px;border:1.5px solid var(--chalk-dim);border-radius:2px;transition:all .2s}
+.inn-pip.live{border-color:var(--bulb);box-shadow:0 0 10px rgba(255,179,71,.5)}
+.inn-pip.on{background:var(--bulb);border-color:var(--bulb)}
+.diamond{width:74px;height:74px}
+
+/* ================= ladder ================= */
+.ladder{display:flex;gap:8px;margin-bottom:16px}
+.rung{
+  flex:1;border:2px solid var(--chalk-faint);border-radius:8px;padding:7px 12px;
+  background:rgba(10,20,14,.4);transition:all .2s;position:relative;overflow:hidden;
+}
+.rung .rn{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.15rem;
+  text-transform:uppercase;line-height:1;color:var(--chalk-dim)}
+.rung .rp{font-size:9px;color:var(--chalk-dim);margin-top:3px}
+.rung.done{border-color:var(--good);background:rgba(94,216,154,.1)}
+.rung.done .rn{color:var(--good)}
+.rung.done:after{content:'WON';position:absolute;top:6px;right:10px;font-size:8px;letter-spacing:.16em;color:var(--good)}
+.rung.now{border-color:var(--bulb);background:rgba(255,179,71,.13);box-shadow:0 0 20px rgba(255,179,71,.25)}
+.rung.now .rn{color:var(--bulb)}
+.rung.now:after{content:'TONIGHT';position:absolute;top:6px;right:10px;font-size:8px;letter-spacing:.16em;color:var(--bulb)}
+
+/* ================= projection ================= */
+.projection{
+  border:2px solid var(--chalk-faint);border-radius:10px;padding:12px 20px;margin-bottom:16px;
+  background:rgba(10,20,14,.5);display:flex;align-items:center;gap:26px;flex-wrap:wrap;
+}
+.proj-lead{font-size:12px;line-height:1.6;flex:1;min-width:340px;color:var(--chalk-dim)}
+.proj-lead b{color:var(--chalk);font-weight:600}
+.proj-lead .big{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.7rem;
+  color:var(--bulb);vertical-align:-2px;margin:0 2px}
+.odds-chip{
+  border:2px solid currentColor;border-radius:8px;padding:7px 16px;text-align:center;flex:0 0 auto;
+}
+.odds-chip .oc-n{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:2rem;line-height:.9}
+.odds-chip .oc-l{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;margin-top:2px}
+.oc-great{color:var(--good)} .oc-ok{color:var(--bulb)} .oc-bad{color:var(--out)}
+.reject-banner{
+  display:flex;align-items:center;gap:12px;border:2px dashed var(--out);border-radius:8px;color:#FF9A8B;
+  padding:9px 18px;font-size:11px;background:rgba(232,80,58,.09);margin-bottom:16px;
+  animation:rejectpulse 1.6s ease-in-out infinite;
+}
+@keyframes rejectpulse{50%{background:rgba(232,80,58,.17)}}
+.reject-banner b{color:var(--out)}
+
+/* ================= synergy bunting ================= */
+.bunting{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:0 0 18px}
+.flag{--c:var(--chalk-dim);clip-path:polygon(0 0,100% 0,100% 62%,50% 100%,0 62%);
+  background:#15251C;border-top:2px solid var(--c);color:var(--c);padding:7px 14px 19px;text-align:center;
+  font-size:9px;letter-spacing:.09em;text-transform:uppercase;transform-origin:top center;
+  animation:sway 5.5s ease-in-out infinite}
+.flag:nth-child(2n){animation-delay:-1.8s} .flag:nth-child(3n){animation-delay:-3.4s}
+@keyframes sway{0%,100%{transform:rotate(1.5deg)}50%{transform:rotate(-1.5deg)}}
+.flag .fc{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.3rem;display:block;line-height:1}
+.flag.t1{--c:var(--chalk)}
+.flag.t2{--c:var(--bulb);background:linear-gradient(180deg,#3A2C14,#241B0D);filter:drop-shadow(0 0 10px rgba(255,179,71,.35))}
+.flag.none{--c:var(--chalk-faint);animation:none;text-transform:none;font-style:italic}
+
+/* ================= the order ================= */
+.board{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:11px;position:relative}
+.board.playing .pc:not(.at-bat){filter:brightness(.6) saturate(.8)}
+.pc{
+  background:var(--chalk);color:var(--ink);border-radius:10px;border:2px solid #0A130E;
+  box-shadow:0 5px 0 #0A130E, 0 12px 24px var(--shadow);
+  display:flex;flex-direction:column;min-height:300px;position:relative;
+  transition:transform .18s cubic-bezier(.2,1.4,.4,1), box-shadow .18s, filter .3s;
+}
+.pc:hover{transform:translateY(-6px) rotate(-.4deg);box-shadow:0 9px 0 #0A130E, 0 20px 34px var(--shadow)}
+.pc.at-bat{transform:translateY(-12px) scale(1.045);z-index:5;
+  box-shadow:0 0 0 3px var(--bulb), 0 10px 0 #0A130E, 0 26px 46px rgba(0,0,0,.6), 0 0 44px rgba(255,179,71,.4)}
+.pc.deal{animation:deal .5s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes deal{from{opacity:0;transform:translateY(42px) rotate(2.5deg) scale(.92)}}
+.pc.thump{animation:thump .3s cubic-bezier(.2,1.6,.4,1)}
+@keyframes thump{35%{transform:scaleX(1.06) scaleY(.94)}70%{transform:scaleX(.97) scaleY(1.03)}}
+.pc.whiffed{animation:whiffshake .3s ease-in-out}
+@keyframes whiffshake{25%{transform:translateX(-5px) rotate(-1deg)}75%{transform:translateX(5px) rotate(1deg)}}
+.pc.dropzone{outline:3px dashed var(--bulb);outline-offset:4px}
+.pc-head{display:flex;justify-content:space-between;align-items:center;gap:4px;
+  background:var(--ink);color:var(--chalk);border-radius:7px 7px 0 0;padding:4px 8px}
+.ord{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.3rem;line-height:1;flex:0 0 auto}
+.pc.at-bat .ord{color:var(--bulb)}
+.pos{font-size:7.5px;font-weight:600;letter-spacing:.06em;padding:2px 5px;border-radius:3px;
+  background:rgba(242,237,224,.14);text-align:right;line-height:1.15}
+.pos.req{background:var(--bulb);color:var(--ink)}
+.pc-body{padding:8px 9px 0;flex:1;display:flex;flex-direction:column}
+.pname{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.5rem;line-height:.9;
+  text-transform:uppercase;cursor:grab;overflow-wrap:anywhere;touch-action:none}
+.pname:active{cursor:grabbing}
+.pmeta{font-size:8px;letter-spacing:.07em;color:var(--ink-soft);margin-top:3px}
+
+/* --- the odds panel: the whole point --- */
+.odds{margin-top:9px;padding-top:8px;border-top:1.5px solid rgba(23,20,15,.15)}
+.odds-head{display:flex;justify-content:space-between;align-items:baseline}
+.odds-head .oh-l{font-size:7.5px;letter-spacing:.09em;color:var(--ink-soft);text-transform:uppercase}
+.odds-head .oh-v{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.45rem;line-height:1}
+.odds-bar{display:flex;height:13px;border-radius:4px;overflow:hidden;margin-top:5px;
+  border:1.5px solid var(--ink);background:var(--ink)}
+.odds-bar span{display:block;transition:width .3s cubic-bezier(.2,1,.4,1)}
+.sg-out{background:var(--out)} .sg-walk{background:var(--walk)}
+.sg-single{background:var(--single)} .sg-xtra{background:var(--xtra)} .sg-homer{background:var(--homer)}
+.odds-key{display:flex;flex-wrap:wrap;gap:2px 7px;margin-top:5px;font-size:7px;letter-spacing:.02em;color:var(--ink-soft)}
+.odds-key i{display:inline-block;width:6px;height:6px;border-radius:1px;margin-right:3px;vertical-align:0}
+
+.stats{margin-top:9px;display:flex;flex-direction:column;gap:3px}
+.stat{display:grid;grid-template-columns:52px 1fr 24px;gap:5px;align-items:center;font-size:7.5px;letter-spacing:.04em}
+.stat .sn{color:var(--ink-soft);text-transform:uppercase}
+.stat .sv{font-weight:600;text-align:right;font-size:9.5px}
+.stat .sv.up{color:#1F6E43} .stat .sv.dn{color:var(--out)}
+.sbar{height:5px;background:rgba(23,20,15,.12);border-radius:3px;overflow:hidden}
+.sbar i{display:block;height:100%;border-radius:3px;background:var(--ink);transition:width .35s cubic-bezier(.2,1,.4,1)}
+.stat.k-POW .sbar i{background:var(--clay-deep)} .stat.k-SPD .sbar i{background:#2E6E9E}
+
+.track{display:flex;gap:4px;margin-top:auto;padding:7px 8px 8px;touch-action:none;
+  background:linear-gradient(180deg,var(--clay),var(--clay-deep));border-radius:0 0 7px 7px;border-top:2px solid #0A130E}
+.gcell{height:33px;flex:1 1 0;min-width:0;border-radius:4px;border:1.5px dashed rgba(23,20,15,.4);background:rgba(23,20,15,.14)}
+.gitem{height:33px;min-width:0;border-radius:4px;border:2px solid var(--ink);background:var(--chalk);
+  display:flex;flex-direction:column;justify-content:center;align-items:center;font-size:7px;line-height:1.05;
+  text-align:center;padding:0 2px;overflow:hidden;cursor:grab;touch-action:none;
+  box-shadow:0 2.5px 0 rgba(10,19,14,.55);transition:transform .12s}
+.gitem:hover{transform:translateY(-2px)} .gitem:active{cursor:grabbing}
+.gitem .gi-n{font-weight:600;text-transform:uppercase}
+.gitem .gi-v{color:var(--clay-deep);font-weight:600;margin-top:1px}
+.gitem.w1{flex:1 1 0} .gitem.w2{flex:2.1 1 0}
+.gitem.snapped{animation:snapin .32s cubic-bezier(.2,1.7,.4,1)}
+@keyframes snapin{from{transform:scale(1.35) rotate(-4deg)}60%{transform:scale(.92)}}
+.track.ok{box-shadow:inset 0 0 0 2.5px var(--bulb)} .track.bad{box-shadow:inset 0 0 0 2.5px var(--out)}
+.empty-pc{display:flex;align-items:center;justify-content:center;flex:1;text-align:center;
+  color:var(--ink-soft);font-size:9px;font-style:italic;padding:12px;line-height:1.6}
+.pc.slot-empty{background:rgba(242,237,224,.07);border-style:dashed;border-color:var(--chalk-dim);
+  box-shadow:none;color:var(--chalk-dim)}
+.pc.slot-empty .pc-head{background:transparent;border-bottom:1px dashed var(--chalk-faint)}
+.pc.slot-empty .empty-pc{color:var(--chalk-dim)}
+.countbar{position:absolute;left:8px;right:8px;bottom:-9px;height:5px;border-radius:3px;
+  background:rgba(242,237,224,.14);overflow:hidden}
+.countbar i{display:block;height:100%;width:0;background:var(--bulb);box-shadow:0 0 10px rgba(255,179,71,.8)}
+
+.stamp{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.9rem;line-height:1;
+  padding:3px 10px;border:4px solid currentColor;border-radius:6px;pointer-events:none;opacity:0;z-index:6;
+  background:rgba(242,237,224,.95);white-space:nowrap}
+.stamp.long{font-size:1.25rem}
+.stamp.show{animation:slam .5s cubic-bezier(.2,1.5,.35,1) both}
+@keyframes slam{0%{opacity:0;transform:translate(-50%,-50%) rotate(-10deg) scale(2.6)}
+  55%{opacity:1;transform:translate(-50%,-50%) rotate(-7deg) scale(.94)}
+  100%{opacity:.97;transform:translate(-50%,-50%) rotate(-7deg) scale(1)}}
+.stamp.s-out{color:var(--out);background:#FFE3DC}
+.stamp.s-walk{color:#1E5E9E;background:#DCEBFF}
+.stamp.s-hit{color:#8A5A12;background:#FFE9C4;border-color:#C98A1B;box-shadow:0 0 26px rgba(255,179,71,.6)}
+
+.inning-banner{position:absolute;left:0;right:0;top:38%;z-index:20;text-align:center;pointer-events:none;
+  font-family:'Alfa Slab One',serif;font-size:3rem;color:var(--chalk);
+  text-shadow:0 0 30px rgba(255,179,71,.55), 0 5px 0 rgba(0,0,0,.4);opacity:0}
+.inning-banner.go{animation:banner 1.05s cubic-bezier(.3,1,.4,1) both}
+@keyframes banner{0%{opacity:0;transform:translateX(-46vw) skewX(-8deg)}
+  22%,72%{opacity:1;transform:translateX(0) skewX(0)}100%{opacity:0;transform:translateX(46vw) skewX(8deg)}}
+
+/* ================= verdict ================= */
+.verdict{
+  margin-top:22px;border-radius:14px;padding:20px 26px;display:none;
+  align-items:center;gap:28px;border:3px solid var(--chalk);background:rgba(10,20,14,.75);
+}
+.verdict.show{display:flex;animation:vin .5s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes vin{from{opacity:0;transform:translateY(20px) scale(.97)}}
+.verdict.win{border-color:var(--good);box-shadow:0 0 44px rgba(94,216,154,.25)}
+.verdict.lose{border-color:var(--out);box-shadow:0 0 44px rgba(232,80,58,.22)}
+.v-title{font-family:'Alfa Slab One',serif;font-size:2.6rem;line-height:1;flex:0 0 auto}
+.verdict.win .v-title{color:var(--good)} .verdict.lose .v-title{color:var(--out)}
+.v-body{flex:1;font-size:12.5px;line-height:1.75;color:var(--chalk-dim)}
+.v-body b{color:var(--chalk)}
+.v-reward{color:var(--bulb);font-weight:600}
+
+/* ================= scorecard + log ================= */
+.lower{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:22px;margin-top:24px;align-items:start}
+.chalk-h{display:flex;justify-content:space-between;align-items:baseline;font-size:9.5px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--chalk-dim);border-bottom:2px solid var(--chalk-dim);
+  padding-bottom:6px;margin-bottom:12px}
+.chalk-h b{color:var(--chalk);letter-spacing:.16em}
+.sc-grid{display:grid;grid-template-columns:78px repeat(9,minmax(0,1fr));gap:7px}
+.sc-lbl{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1rem;color:var(--chalk-dim);
+  display:flex;align-items:center;justify-content:flex-end;padding-right:8px;text-align:right;line-height:1;
+  transition:color .2s}
+.sc-lbl.live{color:var(--bulb);text-shadow:0 0 12px rgba(255,179,71,.6)}
+.sc-cell{min-height:40px;border:1.5px dashed var(--chalk-faint);border-radius:6px;display:flex;flex-wrap:wrap;
+  gap:3px;align-items:center;justify-content:center;padding:4px;transition:border-color .2s, background .2s}
+.sc-cell.live{border-color:var(--bulb);border-style:solid;background:rgba(255,179,71,.07)}
+.mark{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:.82rem;line-height:1;
+  padding:2px 5px;border:1.5px solid currentColor;border-radius:4px;
+  animation:chalkmark .34s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes chalkmark{from{opacity:0;transform:rotate(-9deg) scale(1.9)}to{opacity:1;transform:rotate(-3deg) scale(1)}}
+.mark.m-out{color:var(--out)} .mark.m-walk{color:var(--walk)}
+.mark.m-hit{color:var(--bulb-hot);text-shadow:0 0 10px rgba(255,179,71,.5)}
+.mark .rbi{font-size:.66em;vertical-align:super}
+.summary{margin-top:14px;font-size:11.5px;line-height:1.8;color:var(--chalk-dim);
+  border-left:3px solid var(--bulb);padding-left:14px}
+.summary b{color:var(--chalk)}
+.log{border:2px solid rgba(242,237,224,.2);border-radius:10px;background:rgba(10,20,14,.55);
+  padding:10px 12px;font-size:10.5px;line-height:1.7;height:250px;overflow-y:auto}
+.log .inn-div{display:block;border-top:1px solid var(--chalk-faint);margin:7px 0 5px;padding-top:5px;
+  font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--chalk-dim)}
+.log .inn-div:first-child{border-top:0;margin-top:0}
+.log .lead{color:var(--bulb)}
+.log .ln{display:flex;gap:8px}
+.log .who{color:var(--chalk-dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log .r-out .res b{color:var(--out)} .log .r-hit .res b{color:var(--bulb-hot)}
+.log .scored{color:var(--bulb);font-weight:600}
+.log .idle{color:var(--chalk-dim);font-style:italic}
+
+/* ================= dugout ================= */
+.dugout{margin-top:24px;border-top:3px solid var(--chalk);
+  background:linear-gradient(180deg,rgba(10,20,14,.7),rgba(10,20,14,.35));border-radius:0 0 14px 14px;
+  display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) 258px;gap:26px;padding:16px 22px 18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-height:40px;max-height:96px;overflow-y:auto;align-content:flex-start}
+.chips .gitem{flex:0 0 auto;height:40px;font-size:7.5px}
+.chips .gitem.w1{width:74px} .chips .gitem.w2{width:124px}
+.bench{background:var(--chalk);color:var(--ink);border:2px solid #0A130E;border-radius:7px;
+  box-shadow:0 3px 0 #0A130E;padding:5px 10px;cursor:grab;touch-action:none;
+  transition:transform .13s cubic-bezier(.2,1.4,.4,1), box-shadow .13s}
+.bench:hover{transform:translateY(-3px) rotate(-.6deg);box-shadow:0 6px 0 #0A130E}
+.bench:active{cursor:grabbing}
+.bench .bn{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.15rem;line-height:1;text-transform:uppercase}
+.bench .bs{font-size:7.5px;color:var(--ink-soft);letter-spacing:.04em;margin-top:2px}
+.hint{font-size:9px;color:var(--chalk-dim);letter-spacing:.03em;margin-top:8px;line-height:1.6}
+.actions{display:flex;flex-direction:column;gap:9px;justify-content:center}
+button.act{font-family:'Alfa Slab One',serif;font-size:1.4rem;letter-spacing:.03em;padding:13px 10px;
+  border-radius:10px;cursor:pointer;border:3px solid #0A130E;background:var(--bulb);color:#221605;
+  box-shadow:0 6px 0 #7A4E12, 0 12px 26px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.35);
+  transition:transform .1s, box-shadow .1s, filter .2s}
+button.act:hover:not(:disabled){transform:translateY(-2px) scale(1.02);filter:brightness(1.07)}
+button.act:active:not(:disabled){transform:translateY(3px) scale(.98);box-shadow:0 2px 0 #7A4E12}
+button.act:disabled{filter:grayscale(.6) brightness(.7);cursor:default}
+button.act.ghost{background:transparent;color:var(--chalk);font-family:'IBM Plex Mono',monospace;
+  font-size:.78rem;letter-spacing:.18em;text-transform:uppercase;font-weight:600;
+  border:2px solid var(--chalk-dim);box-shadow:none;padding:9px}
+button.act.ghost:hover:not(:disabled){border-color:var(--chalk);filter:none}
+button.act.go{background:var(--good);box-shadow:0 6px 0 #2E7A54, 0 12px 26px rgba(0,0,0,.4), inset 0 2px 0 rgba(255,255,255,.3)}
+
+#ghost{position:fixed;z-index:99;pointer-events:none;opacity:.95;
+  transform:translate(-50%,-50%) rotate(-4deg) scale(1.06);filter:drop-shadow(0 14px 18px rgba(0,0,0,.5))}
+.dragging{opacity:.25}
+body.grabbing, body.grabbing *{cursor:grabbing !important}
+:focus-visible{outline:3px solid var(--bulb);outline-offset:2px}
+
+@media (max-width:1700px){
+  .pname{font-size:1.3rem}.pc{min-height:290px}.opp-name{font-size:2.1rem}
+  .topbar{grid-template-columns:minmax(0,1fr) 420px}
+}
+@media (max-width:1440px){
+  .pname{font-size:1.1rem}.stat{grid-template-columns:44px 1fr 22px}
+  .sb-runs{font-size:3.2rem}.diamond{width:62px;height:62px}
+  .rules{grid-template-columns:1fr 1fr}.rules-tag{max-width:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}
+  .flag{animation:none}
+}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+
+<div class="wrap">
+
+  <!-- ============ how a night works ============ -->
+  <div class="rules">
+    <div class="rules-tag">How a night works</div>
+    <div class="rule"><span class="num">1</span><span class="txt">Your nine batters face the pitcher <b>in order, left to right</b>. Each one either makes an <b>out</b> or <b>reaches base</b>.</span></div>
+    <div class="rule"><span class="num">2</span><span class="txt">Batters who reach base become <b>runners</b>. Later hits push them forward. A runner who gets all the way around <b>scores a run</b>.</span></div>
+    <div class="rule"><span class="num">3</span><span class="txt"><b>Three outs</b> ends the inning and wipes the runners. You play <b>three innings</b> — and the order carries over, it does not reset.</span></div>
+    <div class="rule"><span class="num">4</span><span class="txt">Score the <b>target</b> to beat tonight's pitcher and move up. Miss it and the run ends. Beat all five to win.</span></div>
+  </div>
+
+  <!-- ============ ladder ============ -->
+  <div class="ladder" id="ladder"></div>
+
+  <!-- ============ opponent + scoreboard ============ -->
+  <div class="topbar">
+    <div class="opp">
+      <div>
+        <div class="opp-eyebrow" id="opp-eyebrow">Tonight's opponent</div>
+        <div class="opp-name" id="opp-name">—</div>
+        <div class="opp-sub" id="opp-sub">—</div>
+        <div class="matchups" id="matchups"></div>
+      </div>
+      <div class="target-box">
+        <div class="target-lbl">To beat him, score</div>
+        <div class="target-num" id="target-num">—</div>
+        <div class="target-note">runs in three innings</div>
+      </div>
+    </div>
+
+    <div class="scoreboard">
+      <div class="sb-cell">
+        <div class="sb-lbl">Runs scored</div>
+        <div class="sb-runs" id="runs">0</div>
+        <div class="sb-need">need <b id="need">—</b></div>
+      </div>
+      <div class="sb-cell">
+        <div class="sb-lbl">Outs</div>
+        <div class="outs" id="outs"><span class="out-pip"></span><span class="out-pip"></span><span class="out-pip"></span></div>
+        <div class="sb-lbl" style="margin-top:13px">Inning</div>
+        <div class="inn-strip" id="innings"><span class="inn-pip"></span><span class="inn-pip"></span><span class="inn-pip"></span></div>
+      </div>
+      <div class="sb-cell">
+        <div class="sb-lbl">Runners on</div>
+        <svg class="diamond" viewBox="0 0 40 40" aria-label="Runners on base">
+          <g transform="rotate(45 20 20)">
+            <rect x="9" y="9" width="22" height="22" fill="none" stroke="rgba(242,237,224,.3)" stroke-width="1"/>
+            <rect id="b1" x="27" y="27" width="7.5" height="7.5" fill="none" stroke="rgba(242,237,224,.45)" stroke-width="1.3"/>
+            <rect id="b2" x="27" y="5.5" width="7.5" height="7.5" fill="none" stroke="rgba(242,237,224,.45)" stroke-width="1.3"/>
+            <rect id="b3" x="5.5" y="5.5" width="7.5" height="7.5" fill="none" stroke="rgba(242,237,224,.45)" stroke-width="1.3"/>
+            <rect x="5.5" y="27" width="7.5" height="7.5" fill="var(--chalk)"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ live projection ============ -->
+  <div class="projection" id="projection"></div>
+  <div id="legal"></div>
+
+  <div class="bunting" id="traits"></div>
+
+  <!-- ============ the order ============ -->
+  <div class="board" id="board"></div>
+  <div class="inning-banner" id="inning-banner"></div>
+
+  <!-- ============ verdict ============ -->
+  <div class="verdict" id="verdict"></div>
+
+  <!-- ============ scorecard + log ============ -->
+  <div class="lower">
+    <div>
+      <div class="chalk-h"><span>What each batter did</span><b>Innings down the side · batters across the top</b></div>
+      <div class="sc-grid" id="sc-grid"></div>
+      <div class="summary" id="summary">Read each batter's odds on their card, shuffle the order, then play ball.</div>
+    </div>
+    <div>
+      <div class="chalk-h"><span>Play by play</span><b id="log-head">—</b></div>
+      <div class="log" id="log"><div class="idle">Nothing played yet tonight.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ dugout ============ -->
+  <div class="dugout">
+    <div>
+      <div class="chalk-h"><span>Equipment rack</span><b id="gear-count">0</b></div>
+      <div class="chips" id="gear-tray"></div>
+      <div class="hint">Drag a piece onto a batter's dirt strip to equip it. Wide pieces take two sockets. Drop one away from the board to shelve it. Watch the batter's odds change as you do.</div>
+    </div>
+    <div>
+      <div class="chalk-h"><span>The bench</span><b id="bench-count">0</b></div>
+      <div class="chips" id="bench-tray"></div>
+      <div class="hint">Drag a bench player onto a card to swap them into that spot in the order. Their equipment goes with them.</div>
+    </div>
+    <div class="actions">
+      <button class="act" id="play">PLAY BALL</button>
+      <button class="act ghost" id="reset">Reset the run</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===================================================================
+   LINEUP CARD
+   Single file. No build step. DATA + SIM blocks are qa.js-verified;
+   the odds shown on every card are solved from the same functions
+   that resolve the at-bats, cross-checked to within 0.3pp.
+   =================================================================== */
+
+/* ===DATA_START=== */
+const HITTERS = [
+  // id, name, season, pos, team, tags, CON POW EYE SPD, sockets
+  {id:'bonds01',  n:'Barry Bonds',      y:2001, pos:'LF', team:'Giants',    tags:['Power','Discipline'], CON:62,POW:96,EYE:95,SPD:40, cap:4},
+  {id:'williams41',n:'Ted Williams',    y:1941, pos:'LF', team:'Red Sox',   tags:['Contact','Discipline'],CON:92,POW:78,EYE:96,SPD:42, cap:3},
+  {id:'ruth27',   n:'Babe Ruth',        y:1927, pos:'RF', team:'Yankees',   tags:['Power','Discipline'], CON:80,POW:95,EYE:88,SPD:45, cap:3},
+  {id:'gehrig27', n:'Lou Gehrig',       y:1927, pos:'1B', team:'Yankees',   tags:['Power','Contact'],    CON:88,POW:90,EYE:82,SPD:50, cap:3},
+  {id:'mantle56', n:'Mickey Mantle',    y:1956, pos:'CF', team:'Yankees',   tags:['Power','Discipline'], CON:84,POW:92,EYE:86,SPD:78, cap:3},
+  {id:'rickey85', n:'Rickey Henderson', y:1985, pos:'CF', team:'Yankees',   tags:['Speed','Discipline'], CON:74,POW:58,EYE:88,SPD:97, cap:3},
+  {id:'ichiro04', n:'Ichiro Suzuki',    y:2004, pos:'RF', team:'Mariners',  tags:['Contact','Speed'],    CON:97,POW:28,EYE:55,SPD:88, cap:3},
+  {id:'griffey97',n:'Ken Griffey Jr.',  y:1997, pos:'CF', team:'Mariners',  tags:['Power'],              CON:74,POW:90,EYE:66,SPD:68, cap:3},
+  {id:'arod96',   n:'Alex Rodriguez',   y:1996, pos:'SS', team:'Mariners',  tags:['Power','Contact'],    CON:88,POW:80,EYE:62,SPD:74, cap:3},
+  {id:'bench72',  n:'Johnny Bench',     y:1972, pos:'C',  team:'Reds',      tags:['Power'],              CON:66,POW:84,EYE:64,SPD:40, cap:3},
+  {id:'morgan76', n:'Joe Morgan',       y:1976, pos:'2B', team:'Reds',      tags:['Discipline','Speed'], CON:78,POW:70,EYE:92,SPD:84, cap:3},
+  {id:'pudge99',  n:'Iván Rodríguez',   y:1999, pos:'C',  team:'Rangers',   tags:['Contact'],            CON:84,POW:72,EYE:44,SPD:58, cap:3},
+  {id:'ozzie87',  n:'Ozzie Smith',      y:1987, pos:'SS', team:'Cardinals', tags:['Speed','Contact'],    CON:76,POW:22,EYE:70,SPD:86, cap:2},
+  {id:'schmidt80',n:'Mike Schmidt',     y:1980, pos:'3B', team:'Phillies',  tags:['Power'],              CON:68,POW:88,EYE:80,SPD:60, cap:3},
+  {id:'gwynn94',  n:'Tony Gwynn',       y:1994, pos:'RF', team:'Padres',    tags:['Contact'],            CON:98,POW:40,EYE:72,SPD:52, cap:3},
+  {id:'mays65',   n:'Willie Mays',      y:1965, pos:'CF', team:'Giants',    tags:['Power','Speed'],      CON:80,POW:88,EYE:76,SPD:82, cap:3},
+  {id:'trout12',  n:'Mike Trout',       y:2012, pos:'CF', team:'Angels',    tags:['Power','Speed'],      CON:80,POW:78,EYE:74,SPD:90, cap:3}
+];
+
+const GEAR = [
+  {id:'ash',    n:'Ash Bat',      w:1, mods:{CON:9}},
+  {id:'maple',  n:'War Club',     w:2, mods:{POW:20,CON:-7}},
+  {id:'cork',   n:'Corked Bat',   w:1, mods:{POW:11,CON:2}},
+  {id:'tar',    n:'Pine Tar',     w:1, mods:{CON:6}},
+  {id:'bgloves',n:'Bat Gloves',   w:1, mods:{CON:4,POW:4}},
+  {id:'donut',  n:'Weighted Donut',w:2,mods:{POW:14,SPD:-5}},
+  {id:'chain',  n:'Ti Necklace',  w:1, mods:{SPD:8}},
+  {id:'cleats', n:'Gold Cleats',  w:2, mods:{SPD:17}},
+  {id:'eyeblack',n:'Eye Black',   w:1, mods:{EYE:9}},
+  {id:'guard',  n:'Elbow Guard',  w:1, mods:{EYE:8,CON:2}},
+  {id:'helmet', n:'Two-Tone Lid', w:1, mods:{EYE:5,POW:3}}
+];
+
+const PITCHERS = [
+  {id:'longman', n:'Long Relief',      y:'—',    STUFF:48, CONTROL:52, note:'The soft landing'},
+  {id:'maddux95',n:'Greg Maddux',      y:1995,   STUFF:72, CONTROL:97, note:'Never walks you'},
+  {id:'koufax65',n:'Sandy Koufax',     y:1965,   STUFF:95, CONTROL:74, note:'Overpowering, wild'},
+  {id:'gibson68',n:'Bob Gibson',       y:1968,   STUFF:94, CONTROL:86, note:'Kills your bottom half'},
+  {id:'pedro00', n:'Pedro Martínez',   y:2000,   STUFF:97, CONTROL:91, note:'The wall'}
+];
+
+/* The run: five arms in rising order of difficulty. Beat each one's run
+   target across three innings to advance. Miss it and the night is over. */
+const LADDER = [
+  {pitcher:'longman',  target:3, name:'Opening Night', blurb:'A tune-up against a tired arm. Get comfortable.'},
+  {pitcher:'maddux95', target:2, name:'The Surgeon',   blurb:'He almost never walks anyone. You have to actually hit him.'},
+  {pitcher:'koufax65', target:2, name:'The Fastball',  blurb:'Overpowering, but he loses the strike zone. Patient batters get on.'},
+  {pitcher:'gibson68', target:2, name:'The Grinder',   blurb:'Ends innings fast. Your bottom of the order may never bat.'},
+  {pitcher:'pedro00',  target:2, name:'The Wall',      blurb:'The best arm here. Two runs is all you need, and it will be hard.'}
+];
+
+/* ===DATA_END=== */
+
+/* ===SIM_START=== */
+/* Pure resolution logic. Extracted verbatim by qa.js for headless verification. */
+
+const TIERS = {
+  Power:      [[3,{POW:8}],[5,{POW:19}]],
+  Contact:    [[3,{CON:7}],[5,{CON:16}]],
+  Speed:      [[2,{SPD:8}],[4,{SPD:18,CON:8}]],
+  Discipline: [[3,{EYE:8}],[5,{EYE:17}]]
+};
+
+function computeTraits(lineup){
+  const styleCount = {}, teamCount = {};
+  for(const p of lineup){
+    if(!p) continue;
+    for(const t of p.tags) styleCount[t] = (styleCount[t]||0)+1;
+    teamCount[p.team] = (teamCount[p.team]||0)+1;
+  }
+  const bonus = {CON:0,POW:0,EYE:0,SPD:0};
+  const list = [];
+
+  for(const name in TIERS){
+    const c = styleCount[name]||0;
+    let tier = 0, mods = null;
+    for(const [need,m] of TIERS[name]) if(c >= need){ tier++; mods = m; }
+    if(c > 0) list.push({name, count:c, tier, next:nextNeed(TIERS[name], c)});
+    if(mods) for(const k in mods) bonus[k] += mods[k];
+  }
+  for(const team in teamCount){
+    const c = teamCount[team];
+    if(c < 2) continue;
+    const tier = c >= 3 ? 2 : 1;
+    const m = tier === 2 ? {CON:11,POW:11} : {CON:5,POW:5};
+    for(const k in m) bonus[k] += m[k];
+    list.push({name:team, count:c, tier, next:tier===2?null:3, team:true});
+  }
+  list.sort((a,b)=> b.tier - a.tier || b.count - a.count);
+
+  const filled = lineup.filter(Boolean);
+  const legal = {
+    C:  filled.some(p=>p.pos==='C'),
+    SS: filled.some(p=>p.pos==='SS'),
+    full: filled.length === 9
+  };
+  legal.ok = legal.C && legal.SS;
+  return {list, bonus, legal, styleCount, teamCount};
+}
+
+function nextNeed(tiers, c){
+  for(const [need] of tiers) if(c < need) return need;
+  return null;
+}
+
+/* Out-of-position penalty: this is the mechanic that fights pure synergy stacking. */
+const OOP_PENALTY = {CON:-15, POW:-8};
+
+function effStats(p, equipped, traitBonus, legal){
+  const s = {CON:p.CON, POW:p.POW, EYE:p.EYE, SPD:p.SPD};
+  for(const g of equipped) for(const k in g.mods) s[k] += g.mods[k];
+  for(const k in traitBonus) s[k] += traitBonus[k];
+  if(!legal.ok) for(const k in OOP_PENALTY) s[k] += OOP_PENALTY[k];
+  for(const k in s) s[k] = Math.max(1, Math.round(s[k]));
+  return s;
+}
+
+function clamp(v,lo,hi){ return v < lo ? lo : v > hi ? hi : v; }
+
+function resolveAtBat(s, pit, rng){
+  // EYE vs CONTROL is a wide axis on purpose: it's the only way a low-contact
+  // slugger (Bonds) stays useful against elite STUFF.
+  const walkPct = clamp((s.EYE - pit.CONTROL) * 0.55 + 6, 1.2, 34);
+  if(rng()*100 < walkPct) return {type:'BB', bases:1, code:'BB', hit:false};
+
+  // "hit" not "contact" — ~70% of plate appearances must end in an out or
+  // the frame never ends and the three-out clock stops meaning anything.
+  const hitPct = clamp(18 + (s.CON - pit.STUFF) * 0.40, 4, 48);
+  if(rng()*100 >= hitPct){
+    const k = rng() < clamp(0.28 + (pit.STUFF-60)*0.006, .1, .62);
+    return {type:'OUT', bases:0, code: k ? 'K' : (rng()<.5?'F8':'6-3'), hit:false};
+  }
+  const power = rng()*100 + s.POW * 0.62;
+  if(power > 138) return {type:'HR', bases:4, code:'HR', hit:true};
+  if(power > 124 && s.SPD > 78 && rng() < .34) return {type:'3B', bases:3, code:'3B', hit:true};
+  if(power > 116) return {type:'2B', bases:2, code:'2B', hit:true};
+  return {type:'1B', bases:1, code:'1B', hit:true};
+}
+
+/* bases: [first, second, third] holding SPD of the runner, or null */
+function advance(bases, n, batterSPD, rng, wheels){
+  let runs = 0;
+  const push = (from, amount) => {
+    const to = from + amount;
+    if(to >= 3){ runs++; return null; }
+    return to;
+  };
+  const next = [null,null,null];
+  const place = (idx, spd) => { if(idx !== null) next[idx] = spd; };
+
+  for(let i = 2; i >= 0; i--){
+    if(bases[i] === null) continue;
+    let mv = n;
+    // fast runners take the extra base on singles
+    if(n === 1 && (bases[i] > 82 || wheels) && rng() < .28) mv = 2;
+    place(push(i, mv), bases[i]);
+  }
+  if(n >= 4) runs++;
+  else place(push(-1, n), batterSPD);
+  return {runs, bases:next};
+}
+
+function simHalfInning(lineupPlayers, gearMap, pitcher, rng, startPos){
+  const t = computeTraits(lineupPlayers);
+  const wheels = (t.styleCount['Speed']||0) >= 4;
+  let bases = [null,null,null], outs = 0, runs = 0, faced = 0, i = startPos || 0;
+  const log = [];
+  const guard = 60;
+
+  while(outs < 3 && faced < guard){
+    const p = lineupPlayers[i % 9];
+    i++;
+    if(!p){ // an empty slot is an automatic out — you must field nine
+      outs++; faced++;
+      log.push({name:'— empty —', code:'OUT', runs:0, out:true});
+      continue;
+    }
+    faced++;
+    const s = effStats(p, gearMap[p.id] || [], t.bonus, t.legal);
+    const r = resolveAtBat(s, pitcher, rng);
+
+    if(r.type === 'OUT'){
+      outs++;
+      log.push({name:p.n, code:r.code, runs:0, out:true});
+      continue;
+    }
+    // steal attempt: runner on first only, Speed 4 unlocked
+    let stole = false;
+    if(wheels && bases[0] !== null && bases[1] === null && rng() < .55){
+      bases[1] = bases[0]; bases[0] = null; stole = true;
+    }
+    const a = advance(bases, r.bases, s.SPD, rng, wheels);
+    bases = a.bases; runs += a.runs;
+    log.push({name:p.n, code:r.code, runs:a.runs, out:false, hit:r.hit, stole});
+  }
+  return {runs, outs, faced, log, traits:t, nextPos: i % 9};
+}
+
+/* A round is three frames against the same arm. The batting order does NOT
+   reset between them — where frame 1 died decides who leads off frame 2.
+   That carryover is what makes the bottom of the order worth investing in. */
+function simRound(lineupPlayers, gearMap, pitcher, rng, frames){
+  let pos = 0, runs = 0, faced = 0;
+  const perFrame = [];
+  for(let f = 0; f < (frames || 3); f++){
+    const r = simHalfInning(lineupPlayers, gearMap, pitcher, rng, pos);
+    pos = r.nextPos; runs += r.runs; faced += r.faced;
+    perFrame.push(r.runs);
+  }
+  return {runs, faced, perFrame};
+}
+
+
+/* ---------------------------------------------------------------
+   READABILITY LAYER
+   resolveAtBat is a pure function of two stat blocks, so a batter's
+   exact outcome distribution can be solved rather than guessed at.
+   The player should never have to wonder what their board will do.
+   --------------------------------------------------------------- */
+function atBatOdds(s, pit){
+  const pWalk = clamp((s.EYE - pit.CONTROL) * 0.55 + 6, 1.2, 34) / 100;
+  const pHit  = clamp(18 + (s.CON - pit.STUFF) * 0.40, 4, 48) / 100;
+
+  // power = uniform(0,100) + POW*0.62, so P(power > x) is linear
+  const base  = s.POW * 0.62;
+  const above = x => clamp((base + 100 - x) / 100, 0, 1);
+  const a138 = above(138), a124 = above(124), a116 = above(116);
+
+  // conditional on a hit, in the same order resolveAtBat tests them
+  const cHR     = a138;
+  const cTriple = s.SPD > 78 ? (a124 - a138) * 0.34 : 0;
+  const cDouble = Math.max(0, a116 - a138 - cTriple);
+  const cSingle = Math.max(0, 1 - cHR - cTriple - cDouble);
+
+  const hit = (1 - pWalk) * pHit;
+  const o = {
+    out:    (1 - pWalk) * (1 - pHit),
+    walk:   pWalk,
+    single: hit * cSingle,
+    double: hit * cDouble,
+    triple: hit * cTriple,
+    homer:  hit * cHR
+  };
+  o.onBase = 1 - o.out;
+  o.extra  = o.double + o.triple + o.homer;
+  // expected bases the batter themselves takes — a rough "how much does this slot move the line"
+  o.bases  = o.walk + o.single + 2*o.double + 3*o.triple + 4*o.homer;
+  return o;
+}
+
+/* Expected output of a whole board. Runs the real simulation, so this
+   projection can never disagree with what actually happens. */
+function projectRound(lineupPlayers, gearMap, pitcher, rng, n, target){
+  const N = n || 1200;
+  let total = 0, wins = 0, faced = 0;
+  for(let i = 0; i < N; i++){
+    const r = simRound(lineupPlayers, gearMap, pitcher, rng, 3);
+    total += r.runs; faced += r.faced;
+    if(target != null && r.runs >= target) wins++;
+  }
+  return {
+    mean: total / N,
+    faced: faced / N,
+    winPct: target == null ? null : wins / N
+  };
+}
+
+if(typeof module !== 'undefined') module.exports = {computeTraits, effStats, resolveAtBat, simHalfInning, simRound, advance, atBatOdds, projectRound};
+/* ===SIM_END=== */
+
+/* =================== plain language =================== */
+const POS_NAME = {C:'CATCHER', SS:'SHORTSTOP', '1B':'FIRST BASE', '2B':'SECOND BASE',
+  '3B':'THIRD BASE', LF:'LEFT FIELD', CF:'CENTER FIELD', RF:'RIGHT FIELD'};
+const STAT_NAME  = {CON:'Hitting', POW:'Power', EYE:'Patience', SPD:'Speed'};
+const STAT_SHORT = {CON:'HIT', POW:'PWR', EYE:'PAT', SPD:'SPD'};
+const STAT_HELP  = {
+  CON:'Hitting — how often this batter gets a hit. Fights the pitcher\u2019s "stops hits".',
+  POW:'Power — how far the ball travels. Turns singles into doubles and home runs.',
+  EYE:'Patience — how often this batter is walked to first base for free. Fights the pitcher\u2019s "avoids walks".',
+  SPD:'Speed — takes extra bases on hits, and steals bases when the Speed synergy is lit.'
+};
+const TRAIT_NAME = {Power:'Power', Contact:'Hitting', Speed:'Speed', Discipline:'Patience'};
+const RESULT = {
+  OUT:{word:'OUT',       kind:'out',  tell:'is out'},
+  BB: {word:'WALK',      kind:'walk', tell:'walks to first base'},
+  '1B':{word:'SINGLE',   kind:'hit',  tell:'singles — takes one base'},
+  '2B':{word:'DOUBLE',   kind:'hit',  tell:'doubles — takes two bases'},
+  '3B':{word:'TRIPLE',   kind:'hit',  tell:'triples — takes three bases'},
+  HR: {word:'HOME RUN',  kind:'hit',  tell:'HITS IT OUT — everyone on base scores'}
+};
+const pct = v => Math.round(v * 100);
+
+/* =================== state =================== */
+const byId = id => HITTERS.find(h=>h.id===id) || GEAR.find(g=>g.id===id);
+const pitcherOf = rung => PITCHERS.find(p => p.id === LADDER[rung].pitcher);
+
+function freshRun(){
+  return {
+    lineup: ['rickey85','gwynn94','ruth27','gehrig27','bench72','ozzie87','morgan76','griffey97','ichiro04'].map(id=>byId(id)),
+    gearMap: { ruth27:[byId('maple')], gwynn94:[byId('ash')], rickey85:[byId('cleats')] },
+    loose: ['cork','tar','bgloves'].map(id=>byId(id)),
+    rewards: ['donut','chain','eyeblack','guard','helmet'],
+    rung: 0,
+    status: 'ready',       // ready | playing | won | lost | champion
+    playing: false,
+    dealt: false,
+    lastSnap: null
+  };
+}
+let S = freshRun();
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* =================== audio =================== */
+let AC = null;
+const audio = {
+  ready(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC && AC.state==='suspended') AC.resume(); },
+  noise(dur, freq, q, gain, type){
+    if(!AC) return;
+    const n = Math.max(1, Math.floor(AC.sampleRate * dur));
+    const buf = AC.createBuffer(1, n, AC.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/n, 2);
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const f = AC.createBiquadFilter(); f.type = type||'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = AC.createGain(); g.gain.value = gain;
+    src.connect(f).connect(g).connect(AC.destination); src.start();
+  },
+  tone(freq, dur, gain, type, delay){
+    if(!AC) return;
+    const t0 = AC.currentTime + (delay||0);
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type||'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + .012);
+    g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+    o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0 + dur + .02);
+  },
+  cheer(big){
+    if(!AC) return;
+    const dur = big ? 1.5 : .7, n = Math.floor(AC.sampleRate * dur);
+    const buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<n;i++){ const t = i/n; d[i] = (Math.random()*2-1) * Math.sin(Math.PI*Math.min(1,t*1.6)) * Math.pow(1-t,.6); }
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const f = AC.createBiquadFilter(); f.type='bandpass'; f.frequency.value = big?900:700; f.Q.value=.55;
+    const g = AC.createGain(); g.gain.value = big?.34:.16;
+    src.connect(f).connect(g).connect(AC.destination); src.start();
+  },
+  snap(){ this.noise(.05, 2600, 4, .13); this.tone(140, .1, .17, 'triangle'); },
+  lift(){ this.tone(540, .05, .05, 'square'); },
+  reject(){ this.tone(92, .14, .11, 'sawtooth'); },
+  crack(){ this.noise(.08, 1900, 1.2, .34); this.tone(220, .09, .12, 'triangle'); },
+  whiff(){ this.noise(.14, 560, .7, .1, 'lowpass'); },
+  homer(){ this.crack(); this.cheer(true); [523,659,784,1046].forEach((f,i)=> this.tone(f,.3,.12,'triangle', .1+i*.09)); },
+  tick(){ this.tone(1200, .012, .02, 'square'); },
+  bell(){ [880,1108].forEach((f,i)=>this.tone(f,.4,.08,'sine',i*.06)); },
+  win(){ [523,659,784,1046,1318].forEach((f,i)=>this.tone(f,.5,.11,'triangle',i*.11)); this.cheer(true); },
+  lose(){ [330,262,196].forEach((f,i)=>this.tone(f,.6,.11,'sawtooth',i*.17)); }
+};
+
+/* =================== particles =================== */
+const fxc = document.getElementById('fx'), fctx = fxc.getContext('2d');
+let parts = [];
+function sizeFx(){ fxc.width = innerWidth*devicePixelRatio; fxc.height = innerHeight*devicePixelRatio;
+  fctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+addEventListener('resize', sizeFx); sizeFx();
+function burst(x, y, o){
+  if(REDUCED) return;
+  o = Object.assign({n:14, spread:2.6, up:2.2, size:3, life:600, colors:['#F2EDE0'], grav:.05}, o);
+  for(let i=0;i<o.n;i++){
+    const a = Math.random()*Math.PI*2, v = .4 + Math.random()*o.spread;
+    parts.push({x, y, vx:Math.cos(a)*v, vy:Math.sin(a)*v - Math.random()*o.up,
+      s:o.size*(.5+Math.random()), r:Math.random()*Math.PI, vr:(Math.random()-.5)*.2,
+      born:performance.now(), life:o.life*(.6+Math.random()*.7),
+      c:o.colors[Math.floor(Math.random()*o.colors.length)], grav:o.grav});
+  }
+}
+function fxLoop(now){
+  fctx.clearRect(0,0,innerWidth,innerHeight);
+  parts = parts.filter(p => now - p.born < p.life);
+  for(const p of parts){
+    const k = (now - p.born)/p.life;
+    p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.r += p.vr;
+    fctx.save(); fctx.globalAlpha = 1-k; fctx.translate(p.x,p.y); fctx.rotate(p.r);
+    fctx.fillStyle = p.c; fctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.7); fctx.restore();
+  }
+  requestAnimationFrame(fxLoop);
+}
+requestAnimationFrame(fxLoop);
+const ctr = el => { const r = el.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; };
+const chalkPuff = el => { const c=ctr(el); burst(c.x,c.y,{n:12,colors:['#F2EDE0','#D9D2C0'],size:3,life:520}); };
+const dirtPuff  = el => { const c=ctr(el); burst(c.x,c.y+14,{n:10,colors:['#B4764A','#8C5836'],size:3.4,up:1.4,life:480}); };
+function fireworks(el){
+  const c = ctr(el);
+  burst(c.x,c.y,{n:46,colors:['#FFB347','#FFCE7A','#F2EDE0','#E8503A'],size:4,spread:4.4,up:3.4,life:1150,grav:.06});
+  setTimeout(()=>burst(c.x,c.y-70,{n:28,colors:['#FFB347','#FFCE7A'],size:3.4,spread:3.4,life:900}),170);
+}
+function confetti(){
+  if(REDUCED) return;
+  for(let i=0;i<3;i++) setTimeout(()=>burst(innerWidth*(.25+i*.25), innerHeight*.32,
+    {n:40,colors:['#5ED89A','#FFB347','#F2EDE0','#78B7FF'],size:5,spread:4.6,up:4,life:1500,grav:.08}), i*160);
+}
+function shake(){ if(REDUCED) return; document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake'); }
+
+/* =================== render =================== */
+const $ = s => document.querySelector(s);
+const modStr  = g => Object.entries(g.mods).map(([k,v])=>`${v>0?'+':''}${v} ${STAT_SHORT[k]}`).join('  ');
+const modLong = g => Object.entries(g.mods).map(([k,v])=>`${v>0?'+':''}${v} ${STAT_NAME[k]}`).join(', ');
+const STATMAX = 130;
+
+function renderBoard(){
+  const t = computeTraits(S.lineup);
+  const pit = pitcherOf(S.rung);
+  const first = !S.dealt;
+  $('#board').innerHTML = S.lineup.map((p,i)=>{
+    const ds = first ? `style="animation-delay:${i*55}ms"` : '';
+    const dc = first ? ' deal' : '';
+    if(!p) return `<div class="pc slot-empty${dc}" ${ds} data-slot="${i}">
+      <div class="pc-head"><span class="ord">${i+1}</span><span class="pos">EMPTY</span></div>
+      <div class="empty-pc">Nobody batting here.<br><br>An empty spot in the order is an <b>automatic out</b>.<br><br>Drag someone in from the bench.</div>
+      <div class="countbar"><i></i></div></div>`;
+
+    const eq = S.gearMap[p.id] || [];
+    const used = eq.reduce((a,g)=>a+g.w,0);
+    const cells = Array.from({length:p.cap-used},()=>`<div class="gcell"></div>`).join('');
+    const items = eq.map(g=>`<div class="gitem w${g.w}${S.lastSnap===g.id?' snapped':''}" data-gear="${g.id}" data-from="${p.id}" title="${g.n} — ${modLong(g)}">
+      <span class="gi-n">${g.n}</span><span class="gi-v">${modStr(g)}</span></div>`).join('');
+
+    const base = {CON:p.CON,POW:p.POW,EYE:p.EYE,SPD:p.SPD};
+    const s = effStats(p, eq, t.bonus, t.legal);
+    const o = atBatOdds(s, pit);
+
+    const seg = (cls,v,label) => v > .004 ? `<span class="${cls}" style="width:${v*100}%" title="${label} ${pct(v)}%"></span>` : '';
+    const xtra = o.double + o.triple;
+    const stats = ['CON','POW','EYE','SPD'].map(k=>{
+      const d = s[k]-base[k];
+      return `<div class="stat k-${k}" title="${STAT_HELP[k]}">
+        <span class="sn">${STAT_NAME[k]}</span>
+        <div class="sbar"><i style="width:${Math.min(100,s[k]/STATMAX*100)}%"></i></div>
+        <span class="sv ${d>0?'up':d<0?'dn':''}">${s[k]}</span></div>`;
+    }).join('');
+
+    return `<div class="pc${dc}" ${ds} data-slot="${i}" data-player="${p.id}">
+      <div class="pc-head"><span class="ord">${i+1}</span><span class="pos${(p.pos==='C'||p.pos==='SS')?' req':''}">${POS_NAME[p.pos]||p.pos}</span></div>
+      <div class="pc-body">
+        <div class="pname" data-drag-player="${p.id}">${p.n}</div>
+        <div class="pmeta">${p.y} season · ${p.team}</div>
+
+        <div class="odds">
+          <div class="odds-head">
+            <span class="oh-l">Reaches base</span>
+            <span class="oh-v">${pct(o.onBase)}%</span>
+          </div>
+          <div class="odds-bar" title="Against ${pit.n}">
+            ${seg('sg-out',o.out,'Out')}${seg('sg-walk',o.walk,'Walk')}${seg('sg-single',o.single,'Single')}${seg('sg-xtra',xtra,'Double or triple')}${seg('sg-homer',o.homer,'Home run')}
+          </div>
+          <div class="odds-key">
+            <span><i style="background:var(--out)"></i>out ${pct(o.out)}</span>
+            <span><i style="background:var(--walk)"></i>walk ${pct(o.walk)}</span>
+            <span><i style="background:var(--single)"></i>single ${pct(o.single)}</span>
+            <span><i style="background:var(--xtra)"></i>2–3 base ${pct(xtra)}</span>
+            <span><i style="background:var(--homer);outline:1px solid rgba(23,20,15,.3)"></i>homer ${pct(o.homer)}</span>
+          </div>
+        </div>
+
+        <div class="stats">${stats}</div>
+      </div>
+      <div class="track" data-track="${p.id}">${items}${cells}</div>
+      <div class="stamp"></div>
+      <div class="countbar"><i></i></div>
+    </div>`;
+  }).join('');
+  S.dealt = true; S.lastSnap = null;
+}
+
+function renderScorecard(){
+  let html = '';
+  for(let f=0; f<3; f++){
+    html += `<div class="sc-lbl" id="sc-lbl-${f}">Inning ${f+1}</div>`;
+    for(let s=0; s<9; s++) html += `<div class="sc-cell" id="sc-${f}-${s}"></div>`;
+  }
+  $('#sc-grid').innerHTML = html;
+}
+
+function renderLadder(){
+  $('#ladder').innerHTML = LADDER.map((r,i)=>{
+    const p = PITCHERS.find(x=>x.id===r.pitcher);
+    const cls = i < S.rung ? 'done' : i === S.rung ? 'now' : '';
+    return `<div class="rung ${cls}">
+      <div class="rn">${i+1}. ${r.name}</div>
+      <div class="rp">${p.n} · score ${r.target}+ to advance</div>
+    </div>`;
+  }).join('');
+}
+
+function renderOpponent(){
+  const r = LADDER[S.rung], p = pitcherOf(S.rung);
+  $('#opp-eyebrow').textContent = `Tonight — opponent ${S.rung+1} of ${LADDER.length} · ${r.name}`;
+  $('#opp-name').textContent = `${p.n}${p.y!=='—'?`, ${p.y}`:''}`;
+  $('#opp-sub').textContent = r.blurb;
+  $('#target-num').textContent = r.target;
+  $('#need').textContent = `${r.target} to win`;
+  $('#matchups').innerHTML = `
+    <div class="mu"><span class="mu-l">His <b>stops hits</b> fights your batters' <b>Hitting</b></span>
+      <div class="mu-bar"><i style="width:${p.STUFF}%"></i></div><span class="mu-v">${p.STUFF}</span></div>
+    <div class="mu"><span class="mu-l">His <b>avoids walks</b> fights your batters' <b>Patience</b></span>
+      <div class="mu-bar"><i style="width:${p.CONTROL}%"></i></div><span class="mu-v">${p.CONTROL}</span></div>`;
+}
+
+let projTimer = null;
+function renderProjection(){
+  // simulating 900 rounds costs ~30ms, which would stutter a drag if run inline.
+  // Paint the board first, then settle the projection a frame later.
+  if(projTimer) clearTimeout(projTimer);
+  const el = $('#projection');
+  if(!el.dataset.ready) el.innerHTML = `<div class="proj-lead">Reading the matchup…</div>`;
+  projTimer = setTimeout(computeProjection, 60);
+}
+function computeProjection(){
+  const r = LADDER[S.rung], p = pitcherOf(S.rung);
+  const proj = projectRound(S.lineup, S.gearMap, p, Math.random, 900, r.target);
+  const w = proj.winPct;
+  const band = w >= .65 ? 'oc-great' : w >= .40 ? 'oc-ok' : 'oc-bad';
+  const verdict = w >= .65 ? 'Comfortable' : w >= .40 ? 'A coin flip' : 'Long odds';
+  $('#projection').innerHTML = `
+    <div class="proj-lead">
+      As built, this order scores <span class="big">${proj.mean.toFixed(1)}</span> runs a night against ${p.n},
+      and gets roughly <b>${proj.faced.toFixed(0)} turns at bat</b> across the three innings.
+      You need <b>${r.target}</b>. Change the order or the equipment and this number moves.
+    </div>
+    <div class="odds-chip ${band}">
+      <div class="oc-n">${pct(w)}%</div>
+      <div class="oc-l">${verdict}</div>
+    </div>`;
+  $('#projection').dataset.ready = '1';
+}
+
+function renderTraits(){
+  const t = computeTraits(S.lineup);
+  $('#traits').innerHTML = t.list.length
+    ? t.list.map(x=>{
+        const nm = TRAIT_NAME[x.name] || x.name;
+        return `<div class="flag ${x.tier>=2?'t2':x.tier===1?'t1':''}" title="${x.tier>0?'Active — bonus applied to every batter':'Not enough players yet'}">
+          <span class="fc">${x.count}</span>${nm}${x.next?`<br><span style="opacity:.6">need ${x.next}</span>`:''}</div>`;
+      }).join('')
+    : `<div class="flag none">No synergies yet</div>`;
+
+  const L = $('#legal');
+  if(!t.legal.ok){
+    const miss = [!t.legal.C && 'catcher', !t.legal.SS && 'shortstop'].filter(Boolean).join(' or ');
+    L.innerHTML = `<div class="reject-banner">⚠ <span><b>YOUR CARD IS ILLEGAL</b> — you have no ${miss} in the order. Every batter loses
+      <b>15 Hitting and 8 Power</b> until you put one in. The odds on the cards already include that penalty.</span></div>`;
+  } else L.innerHTML = '';
+}
+
+function renderTray(){
+  $('#gear-count').textContent = `${S.loose.length} on the rack`;
+  $('#gear-tray').innerHTML = S.loose.length
+    ? S.loose.map(g=>`<div class="gitem w${g.w}" data-gear="${g.id}" title="${g.n} — ${modLong(g)}">
+        <span class="gi-n">${g.n}</span><span class="gi-v">${modStr(g)}</span></div>`).join('')
+    : `<div class="hint" style="margin:0">Rack is empty — it's all on the field.</div>`;
+
+  const inLineup = new Set(S.lineup.filter(Boolean).map(p=>p.id));
+  const bench = HITTERS.filter(h=>!inLineup.has(h.id));
+  $('#bench-count').textContent = `${bench.length} not batting`;
+  $('#bench-tray').innerHTML = bench.length
+    ? bench.map(p=>`<div class="bench" data-drag-player="${p.id}">
+        <div class="bn">${p.n}</div>
+        <div class="bs">${p.y} · ${POS_NAME[p.pos]||p.pos} · ${p.team}</div></div>`).join('')
+    : `<div class="hint" style="margin:0">Everyone is in the order.</div>`;
+}
+
+function renderAll(){ renderLadder(); renderOpponent(); renderBoard(); renderTraits(); renderProjection(); renderTray(); }
+
+function setBases(b){
+  ['b1','b2','b3'].forEach((id,i)=>
+    document.getElementById(id).setAttribute('fill', b[i]!==null ? 'var(--bulb)' : 'none'));
+}
+function setOuts(n){ document.querySelectorAll('#outs .out-pip').forEach((el,i)=>el.classList.toggle('on', i<n)); }
+
+let shownRuns = 0, runAnim = null;
+function setRuns(target){
+  const el = $('#runs');
+  if(REDUCED){ shownRuns = target; el.textContent = target; return; }
+  if(runAnim) clearInterval(runAnim);
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  runAnim = setInterval(()=>{
+    if(shownRuns >= target){ clearInterval(runAnim); runAnim = null; return; }
+    shownRuns++; el.textContent = shownRuns; audio.tick();
+  }, 70);
+}
+
+/* =================== drag =================== */
+let drag = null;
+document.addEventListener('pointerdown', e=>{
+  audio.ready();
+  if(S.playing) return;
+  const gearEl = e.target.closest('[data-gear]');
+  const playerEl = e.target.closest('[data-drag-player]');
+  if(!gearEl && !playerEl) return;
+  e.preventDefault();
+  const src = gearEl || playerEl, rect = src.getBoundingClientRect();
+  drag = gearEl ? {kind:'gear', id:gearEl.dataset.gear, from:gearEl.dataset.from||null, el:src}
+                : {kind:'player', id:playerEl.dataset.dragPlayer, el:src};
+  const ghost = src.cloneNode(true);
+  ghost.id='ghost'; ghost.style.width=rect.width+'px'; ghost.style.height=rect.height+'px';
+  ghost.style.left=e.clientX+'px'; ghost.style.top=e.clientY+'px';
+  document.body.appendChild(ghost); document.body.classList.add('grabbing');
+  src.classList.add('dragging'); drag.ghost = ghost; audio.lift();
+});
+document.addEventListener('pointermove', e=>{
+  if(!drag) return;
+  e.preventDefault();
+  drag.ghost.style.left=e.clientX+'px'; drag.ghost.style.top=e.clientY+'px';
+  document.querySelectorAll('.track').forEach(t=>t.classList.remove('ok','bad'));
+  document.querySelectorAll('.pc').forEach(r=>r.classList.remove('dropzone'));
+  if(drag.kind==='gear'){ const t = nearestTrack(e.clientX,e.clientY); if(t) t.el.classList.add(t.fits?'ok':'bad'); }
+  else { const c = nearestCard(e.clientX,e.clientY); if(c) c.classList.add('dropzone'); }
+});
+function dist(r,x,y){ const dx=Math.max(r.left-x,0,x-r.right), dy=Math.max(r.top-y,0,y-r.bottom); return Math.hypot(dx,dy); }
+function nearestTrack(x,y){
+  let best=null,bd=95;
+  document.querySelectorAll('.track').forEach(el=>{ const d=dist(el.getBoundingClientRect(),x,y); if(d<bd){bd=d;best=el;} });
+  if(!best) return null;
+  const pid=best.dataset.track, p=byId(pid), g=byId(drag.id);
+  const eq=(S.gearMap[pid]||[]).filter(it=>!(drag.from===pid && it.id===drag.id));
+  return {el:best, pid, fits: eq.reduce((a,i)=>a+i.w,0) + g.w <= p.cap};
+}
+function nearestCard(x,y){
+  let best=null,bd=120;
+  document.querySelectorAll('.pc').forEach(el=>{ const d=dist(el.getBoundingClientRect(),x,y); if(d<bd){bd=d;best=el;} });
+  return best;
+}
+document.addEventListener('pointerup', e=>{
+  if(!drag) return;
+  const d=drag; drag=null;
+  d.ghost.remove(); d.el.classList.remove('dragging'); document.body.classList.remove('grabbing');
+  document.querySelectorAll('.track').forEach(t=>t.classList.remove('ok','bad'));
+  document.querySelectorAll('.pc').forEach(r=>r.classList.remove('dropzone'));
+  if(d.kind==='gear') dropGear(d,e); else dropPlayer(d,e);
+  renderAll();
+});
+function dropGear(d,e){
+  const g=byId(d.id);
+  drag=d; const t=nearestTrack(e.clientX,e.clientY); drag=null;
+  if(!t || !t.fits){
+    if(!t && d.from){ S.gearMap[d.from]=(S.gearMap[d.from]||[]).filter(x=>x.id!==g.id); S.loose.push(g); audio.reject(); }
+    else if(t && !t.fits) audio.reject();
+    return;
+  }
+  if(d.from===t.pid) return;
+  if(d.from) S.gearMap[d.from]=(S.gearMap[d.from]||[]).filter(x=>x.id!==g.id);
+  else { const i=S.loose.findIndex(x=>x.id===g.id); if(i>=0) S.loose.splice(i,1); }
+  S.gearMap[t.pid]=[...(S.gearMap[t.pid]||[]), g];
+  S.lastSnap=g.id; dirtPuff(t.el); audio.snap();
+}
+function dropPlayer(d,e){
+  const card=nearestCard(e.clientX,e.clientY), p=byId(d.id);
+  const cur=S.lineup.findIndex(x=>x && x.id===p.id);
+  if(!card){ if(cur>=0){ S.lineup[cur]=null; audio.reject(); } return; }
+  const target=+card.dataset.slot, occ=S.lineup[target];
+  if(occ && occ.id===p.id) return;
+  if(cur>=0) S.lineup[cur]=occ||null;
+  S.lineup[target]=p;
+  chalkPuff(card); audio.snap();
+  requestAnimationFrame(()=>{
+    const el=document.querySelector(`.pc[data-slot="${target}"]`);
+    if(el){ el.classList.add('thump'); el.addEventListener('animationend',()=>el.classList.remove('thump'),{once:true}); }
+  });
+}
+
+/* =================== play =================== */
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+
+async function inningBanner(text){
+  const b=$('#inning-banner'); b.textContent=text;
+  b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
+  audio.bell();
+  await wait(REDUCED?60:780);
+}
+
+function clearResults(){
+  renderScorecard();
+  document.querySelectorAll('.countbar i').forEach(b=>b.style.width='0');
+  document.querySelectorAll('#innings .inn-pip').forEach(f=>f.classList.remove('on','live'));
+  document.querySelectorAll('.pc').forEach(c=>c.classList.remove('at-bat'));
+  document.querySelectorAll('.stamp').forEach(s=>{ s.className='stamp'; s.textContent=''; });
+  $('#board').classList.remove('playing');
+  $('#verdict').className = 'verdict';
+  setOuts(0); setBases([null,null,null]);
+  shownRuns=0; $('#runs').textContent='0';
+  $('#log-head').textContent='—';
+  $('#log').innerHTML=`<div class="idle">Nothing played yet tonight.</div>`;
+}
+
+async function playRound(){
+  if(S.playing || S.status==='lost' || S.status==='champion') return;
+  audio.ready();
+  S.playing=true; S.status='playing';
+  const btn=$('#play'); btn.disabled=true; btn.textContent='IN PLAY…';
+  clearResults();
+  $('#board').classList.add('playing');
+
+  const rung=LADDER[S.rung], pit=pitcherOf(S.rung);
+  const t=computeTraits(S.lineup);
+  const wheels=(t.styleCount['Speed']||0)>=4;
+  const rng=Math.random;
+  const cards=[...document.querySelectorAll('.pc')];
+  const logLines=[], cuts=new Array(9).fill(0);
+  let pos=0, totalRuns=0, totalFaced=0;
+  const inningRuns=[];
+  $('#log').innerHTML=''; $('#summary').textContent='';
+
+  for(let f=0; f<3; f++){
+    let bases=[null,null,null], outs=0, runs=0, guard=0;
+    setOuts(0); setBases(bases);
+    document.querySelectorAll('#innings .inn-pip').forEach((p,i)=>p.classList.toggle('live', i===f));
+    document.querySelectorAll('.sc-lbl').forEach((l,i)=>l.classList.toggle('live', i===f));
+    await inningBanner(`INNING ${f+1}`);
+
+    const lead=S.lineup[pos] ? S.lineup[pos].n : 'an empty spot';
+    logLines.push(`<span class="inn-div">Inning ${f+1} — first up: <span class="lead">${lead}</span> (spot ${pos+1})</span>`);
+    $('#log').innerHTML=logLines.join('');
+
+    while(outs<3 && guard++<30){
+      const slot=pos%9, p=S.lineup[slot], card=cards[slot];
+      pos++; totalFaced++; cuts[slot]++;
+
+      cards.forEach(c=>c.classList.remove('at-bat'));
+      card.classList.add('at-bat');
+      const cell=document.getElementById(`sc-${f}-${slot}`);
+      document.querySelectorAll('.sc-cell').forEach(c=>c.classList.remove('live'));
+      cell.classList.add('live');
+      const stampEl=card.querySelector('.stamp'); stampEl.className='stamp'; stampEl.textContent='';
+
+      const bar=card.querySelector('.countbar i'); bar.style.width='0';
+      const dur=REDUCED?40:400, t0=performance.now();
+      await new Promise(res=>{
+        const step=now=>{ const k=Math.min(1,(now-t0)/dur); bar.style.width=(k*100)+'%';
+          if(k<1) requestAnimationFrame(step); else res(); };
+        requestAnimationFrame(step);
+      });
+      audio.tick();
+      await wait(REDUCED?0:60);   /* a beat before the verdict lands */
+
+      let r, name, spd=50;
+      if(!p){ r={type:'OUT', code:'—', hit:false, bases:0}; name='empty spot'; }
+      else {
+        const st=effStats(p, S.gearMap[p.id]||[], t.bonus, t.legal);
+        r=resolveAtBat(st, pit, rng); name=p.n; spd=st.SPD;
+      }
+      const R = RESULT[r.type];
+      const struck = r.code==='K';
+
+      stampEl.textContent=R.word;
+      stampEl.className='stamp show s-'+R.kind+(R.word.length>6?' long':'');
+      bar.style.width='0';
+
+      let scored=0, stole=false;
+      if(r.type==='OUT'){
+        outs++; setOuts(outs); audio.whiff();
+        card.classList.add('whiffed');
+        card.addEventListener('animationend',()=>card.classList.remove('whiffed'),{once:true});
+      } else {
+        if(wheels && bases[0]!==null && bases[1]===null && rng()<.55){ bases[1]=bases[0]; bases[0]=null; stole=true; dirtPuff(card); }
+        const a=advance(bases, r.bases, spd, rng, wheels);
+        bases=a.bases; scored=a.runs; runs+=scored; totalRuns+=scored;
+        setBases(bases);
+        if(r.type==='HR'){ audio.homer(); fireworks(card); shake(); }
+        else if(r.hit){ audio.crack(); chalkPuff(card); if(scored) audio.cheer(false); }
+        else audio.snap();
+        if(scored) setRuns(totalRuns);
+      }
+
+      cell.insertAdjacentHTML('beforeend',
+        `<span class="mark m-${R.kind}" title="${name} ${R.tell}">${R.word}${scored?`<span class="rbi">+${scored}</span>`:''}</span>`);
+
+      const tell = r.type==='OUT' ? (struck ? 'strikes out' : 'is caught out') : R.tell;
+      logLines.push(`<div class="ln ${r.type==='OUT'?'r-out':'r-hit'}">
+        <span class="who">${name}</span>
+        <span class="res"><b>${tell}</b>${stole?' <span style="opacity:.6">· stole a base</span>':''}${scored?` <span class="scored">· ${scored} run${scored>1?'s':''} score</span>`:''}</span></div>`);
+      $('#log').innerHTML=logLines.join('');
+      $('#log').scrollTop=$('#log').scrollHeight;
+      $('#log-head').textContent=`${totalRuns} of ${rung.target} · inning ${f+1}`;
+
+      await wait(REDUCED?30:(r.type==='HR'?700:270));
+    }
+    inningRuns.push(runs);
+    const pip=document.querySelectorAll('#innings .inn-pip')[f];
+    pip.classList.remove('live'); pip.classList.add('on');
+    await wait(REDUCED?30:380);
+  }
+
+  cards.forEach(c=>c.classList.remove('at-bat'));
+  $('#board').classList.remove('playing');
+  document.querySelectorAll('.sc-cell').forEach(c=>c.classList.remove('live'));
+  document.querySelectorAll('.sc-lbl').forEach(l=>l.classList.remove('live'));
+
+  const most=Math.max(...cuts), fewest=Math.min(...cuts);
+  const hot=cuts.map((c,i)=>c===most?i+1:null).filter(Boolean);
+  const cold=cuts.map((c,i)=>c===fewest?i+1:null).filter(Boolean);
+  $('#summary').innerHTML =
+    `You scored <b>${totalRuns}</b> (${inningRuns.join(' · ')} by inning) and needed <b>${rung.target}</b>. ` +
+    `<b>${totalFaced}</b> turns at bat — the order went around <b>${(totalFaced/9).toFixed(1)}</b> times.<br>` +
+    `Spot${hot.length>1?'s':''} <b>${hot.join(', ')}</b> batted most (${most}×); spot${cold.length>1?'s':''} <b>${cold.join(', ')}</b> batted least (${fewest}×). ` +
+    `Equipment on the spots that rarely bat is doing the least for you.`;
+
+  S.playing=false;
+  finishRound(totalRuns, rung);
+}
+
+function finishRound(runs, rung){
+  const v=$('#verdict'), btn=$('#play');
+  const won = runs >= rung.target;
+
+  if(won && S.rung === LADDER.length-1){
+    S.status='champion';
+    v.className='verdict show win';
+    v.innerHTML=`<div class="v-title">YOU WIN THE RUN</div>
+      <div class="v-body">You scored <b>${runs}</b>, needed <b>${rung.target}</b>, and beat all five arms —
+      finishing on <b>${pitcherOf(S.rung).n}</b>, the best of them.<br>
+      Reset the run to try a different order.</div>`;
+    audio.win(); confetti();
+    btn.disabled=true; btn.textContent='RUN COMPLETE';
+    renderLadder();
+    return;
+  }
+  if(won){
+    S.status='won';
+    const rewardId = S.rewards.length ? S.rewards.splice(Math.floor(Math.random()*S.rewards.length),1)[0] : null;
+    if(rewardId) S.loose.push(byId(rewardId));
+    const next = LADDER[S.rung+1];
+    v.className='verdict show win';
+    v.innerHTML=`<div class="v-title">YOU WIN</div>
+      <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>.
+      ${rewardId?`Your reward: <span class="v-reward">${byId(rewardId).n}</span> (${modLong(byId(rewardId))}) is on the equipment rack.<br>`:''}
+      Next up: <b>${next.name}</b> — ${PITCHERS.find(p=>p.id===next.pitcher).n}, score <b>${next.target}+</b>.
+      Rebuild the order before you take him on.</div>
+      <button class="act go" id="advance" style="flex:0 0 auto">NEXT OPPONENT</button>`;
+    audio.win(); confetti();
+    btn.disabled=true; btn.textContent='WON — ADVANCE';
+    return;
+  }
+  S.status='lost';
+  v.className='verdict show lose';
+  v.innerHTML=`<div class="v-title">THE RUN IS OVER</div>
+    <div class="v-body">You scored <b>${runs}</b> and needed <b>${rung.target}</b> against ${pitcherOf(S.rung).n}.
+    You got through <b>${S.rung}</b> of ${LADDER.length} opponents.<br>
+    Before the next run: the projection bar above tells you your odds <i>before</i> you play — if it says long odds, rebuild first.</div>
+    <button class="act go" id="restart" style="flex:0 0 auto">START A NEW RUN</button>`;
+  audio.lose();
+  btn.disabled=true; btn.textContent='RUN OVER';
+}
+
+/* =================== events =================== */
+document.addEventListener('click', e=>{
+  if(e.target.closest('#play')) return playRound();
+
+  if(e.target.closest('#advance')){
+    S.rung++; S.status='ready';
+    $('#verdict').className='verdict';
+    clearResults();
+    $('#play').disabled=false; $('#play').textContent='PLAY BALL';
+    $('#summary').textContent='New opponent. Check the projection, rebuild, then play ball.';
+    renderAll();
+    audio.bell();
+    return;
+  }
+  if(e.target.closest('#restart') || (e.target.closest('#reset') && !S.playing)){
+    S = freshRun();
+    clearResults();
+    $('#verdict').className='verdict';
+    $('#play').disabled=false; $('#play').textContent='PLAY BALL';
+    $('#summary').textContent='Fresh run. Read the odds on each card, then play ball.';
+    renderAll();
+    audio.bell();
+  }
+});
+
+renderAll();
+renderScorecard();
+setBases([null,null,null]);
+</script>
+</body>
+</html>

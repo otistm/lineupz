@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="LINEUP — build the sequence, break the pitcher.">
+<title>LINEUP</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Big+Shoulders+Display:wght@500;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<canvas id="fx"></canvas>
+
+<div class="wrap">
+
+  <!-- ============ how a night works (dismissible) ============ -->
+  <div class="rules" id="rules">
+    <button type="button" class="rules-toggle" id="rules-toggle" aria-expanded="true">How a night works</button>
+    <div class="rules-body" id="rules-body">
+      <div class="rule"><span class="num">1</span><span class="txt"><b>Draft, then sponsor.</b> Drag batters from the draft into your order (one card per career lineage). Pick <b>one of three sponsors</b> for gear. Then PLAY BALL.</span></div>
+      <div class="rule"><span class="num">2</span><span class="txt"><b>Career cards.</b> Same player can show up as Rookie → Topps → All-Star → World Series. Buying a higher set <b>upgrades</b> the card you already own. Neighbours link — the glowing ropes feed the next bat.</span></div>
+      <div class="rule"><span class="num">3</span><span class="txt"><b>Empty his stamina.</b> Fresh → Laboring → Gassed → BROKEN. Each arm has a <b>gimmick</b>. Empty seats are skipped, never outs — but a short order means he keeps seeing the same bats.</span></div>
+      <div class="rule"><span class="num">4</span><span class="txt">Win or lose, you return to the draft, then a new sponsor trio, then the dugout. Fail a night and lose a <b>life</b>. Zero lives ends the run.</span></div>
+      <button type="button" class="rules-gotit" id="rules-gotit">Got it</button>
+    </div>
+  </div>
+
+  <!-- ============ phase strip + wallet ============ -->
+  <div class="run-bar">
+    <div class="ladder" id="ladder" aria-label="Run phases"></div>
+    <div class="wallet" id="wallet">
+      <div class="wallet-cell">
+        <span class="wallet-lbl"><span class="gold-ico" aria-hidden="true"></span> Gold</span>
+        <b id="gold">12</b>
+      </div>
+      <div class="wallet-cell"><span class="wallet-lbl">Lives</span><b id="lives">4</b></div>
+    </div>
+  </div>
+
+  <!-- ============ opponent ============ -->
+  <div class="topbar">
+    <div class="opp">
+      <div>
+        <div class="opp-eyebrow" id="opp-eyebrow">Tonight's opponent</div>
+        <div class="opp-name" id="opp-name">—</div>
+        <div class="stam">
+          <div class="stam-head">
+            <span class="stam-lbl">His stamina <b id="stam-num">—</b></span>
+            <span class="stam-state" id="stam-state">FRESH</span>
+          </div>
+          <div class="stam-bar" id="stam-bar">
+            <i class="stam-fill" id="stam-fill"></i>
+            <s class="zone" style="left:65%"></s>
+            <s class="zone" style="left:38%"></s>
+            <s class="zone" style="left:12%"></s>
+          </div>
+          <div class="stam-note" id="stam-note">—</div>
+        </div>
+      </div>
+      <div class="target-box">
+        <div class="target-lbl">To beat him, score</div>
+        <div class="target-num" id="target-num">—</div>
+        <div class="target-note">runs in three innings</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ draft / sponsors market ============ -->
+  <div class="market" id="market">
+    <div class="draft" id="draft">
+      <div class="chalk-h"><span>Player draft</span><b id="draft-gold-live"></b></div>
+      <div class="shop-row draft-row" id="draft-row"></div>
+      <div class="shop-actions">
+        <button type="button" class="act ghost" id="reroll">Reroll · 2g</button>
+      </div>
+    </div>
+    <div class="sponsors hidden" id="sponsors">
+      <div class="chalk-h"><span>Pick one sponsor</span><b id="sponsor-gold-live"></b></div>
+      <p class="sponsor-hint" id="sponsor-hint">Three shops — pick one for gear, or continue without.</p>
+      <div class="sponsor-trio" id="sponsor-trio"></div>
+    </div>
+  </div>
+
+  <!-- ============ live scoreboard — only on stage once the night starts ============ -->
+  <div class="scoreboard hidden" id="scoreboard">
+    <div class="sb-cell sb-side">
+      <div class="sb-lbl">Runs scored</div>
+      <div class="sb-runs" id="runs">0</div>
+      <div class="sb-need">need <b id="need">—</b></div>
+      <div class="rally" id="rally"><span class="rl-lbl">Rally</span><b id="rally-n">0</b></div>
+    </div>
+
+    <svg class="diamond" id="field" viewBox="0 0 540 540" role="img" aria-label="The diamond: runners on base">
+      <defs>
+        <!-- mowed stripes, cut on the diagonal to follow the basepaths -->
+        <pattern id="mow" width="54" height="54" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="27" height="54" fill="rgba(242,237,224,.045)"/>
+        </pattern>
+        <pattern id="dirt" width="7" height="7" patternUnits="userSpaceOnUse">
+          <rect width="7" height="7" fill="#8C5836"/>
+          <circle cx="1.6" cy="1.6" r=".9" fill="#B4764A"/>
+          <circle cx="5" cy="4.6" r=".7" fill="#6B4025"/>
+        </pattern>
+      </defs>
+
+      <!-- foul lines running out past the corner bags -->
+      <line x1="270" y1="460" x2="500" y2="230" stroke="var(--chalk-dim)" stroke-width="1.8"/>
+      <line x1="270" y1="460" x2="40" y2="230" stroke="var(--chalk-dim)" stroke-width="1.8"/>
+
+      <!-- infield -->
+      <polygon points="270,460 460,270 270,80 80,270" fill="#173525"/>
+      <polygon points="270,460 460,270 270,80 80,270" fill="url(#mow)"/>
+      <polygon points="270,460 460,270 270,80 80,270" fill="none"
+               stroke="var(--chalk-faint)" stroke-width="1.4"/>
+
+      <!-- basepath -->
+      <path d="M270,460 L460,270 L270,80 L80,270 Z" fill="none" stroke="url(#dirt)" stroke-width="27"/>
+      <path d="M270,460 L460,270 L270,80 L80,270 Z" fill="none"
+            stroke="rgba(242,237,224,.28)" stroke-width="1.2" stroke-dasharray="6 5"/>
+
+      <!-- mound -->
+      <circle cx="270" cy="270" r="34" fill="url(#dirt)" opacity=".85"/>
+      <circle cx="270" cy="270" r="34" fill="none" stroke="rgba(242,237,224,.16)" stroke-width="1.2"/>
+
+      <!-- batter's boxes -->
+      <g fill="none" stroke="var(--chalk-dim)" stroke-width="1.3" stroke-dasharray="4 3">
+        <rect x="216" y="434" width="30" height="50"/>
+        <rect x="294" y="434" width="30" height="50"/>
+      </g>
+
+      <!-- bags -->
+      <g stroke="var(--ink)" stroke-width="2.2" fill="var(--chalk)">
+        <rect x="-11" y="-11" width="22" height="22" transform="translate(460,270) rotate(45)"/>
+        <rect x="-11" y="-11" width="22" height="22" transform="translate(270,80) rotate(45)"/>
+        <rect x="-11" y="-11" width="22" height="22" transform="translate(80,270) rotate(45)"/>
+        <path d="M-13,-10 L13,-10 L13,3 L0,15 L-13,3 Z" transform="translate(270,460)"/>
+      </g>
+
+      <g class="bag-lbl" font-size="14" font-weight="600" letter-spacing="1.8">
+        <text x="270" y="54" text-anchor="middle">2ND</text>
+        <text x="486" y="276" text-anchor="start">1ST</text>
+        <text x="54" y="276" text-anchor="end">3RD</text>
+        <text x="270" y="512" text-anchor="middle">HOME</text>
+      </g>
+
+      <g id="trailLayer"></g>
+      <g id="callLayer"></g>
+      <g id="runnerLayer"></g>
+    </svg>
+
+    <div class="sb-cell sb-side">
+      <div class="sb-lbl">Outs</div>
+      <div class="outs" id="outs"><span class="out-pip"></span><span class="out-pip"></span><span class="out-pip"></span></div>
+      <div class="sb-lbl" style="margin-top:16px">Inning</div>
+      <div class="inn-strip" id="innings"><span class="inn-pip"></span><span class="inn-pip"></span><span class="inn-pip"></span></div>
+    </div>
+  </div>
+
+  <!-- ============ the sequence ============ -->
+  <div class="board-wrap" id="board-wrap">
+    <canvas id="linkfx" aria-hidden="true"></canvas>
+    <div class="board" id="board"></div>
+  </div>
+  <div class="inning-banner" id="inning-banner"></div>
+
+  <!-- ============ dugout ============ -->
+  <div class="dugout" id="dugout">
+    <div>
+      <div class="chalk-h"><span>Equipment rack</span><b id="gear-count">0</b></div>
+      <div class="chips" id="gear-tray"></div>
+    </div>
+    <div>
+      <div class="chalk-h"><span>Your roster</span><b id="bench-count">0</b></div>
+      <div class="chips" id="bench-tray"></div>
+    </div>
+    <div class="actions">
+      <button class="act" id="play">PLAY BALL</button>
+      <button type="button" class="act ghost" id="speed">Speed · 1&times;</button>
+      <button class="act ghost" id="reset">Reset the run</button>
+    </div>
+  </div>
+
+  <!-- ============ result (verdict + night recap) ============ -->
+  <div class="verdict" id="verdict">
+    <div class="verdict-top" id="verdict-top"></div>
+    <div class="recap" id="recap">
+      <div class="recap-col">
+        <div class="chalk-h"><span>What each batter did</span><b>Innings down · batters across</b></div>
+        <div class="sc-grid" id="sc-grid"></div>
+        <div class="summary" id="summary"></div>
+      </div>
+      <div class="recap-col">
+        <div class="chalk-h"><span>Play by play</span><b id="log-head">—</b></div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

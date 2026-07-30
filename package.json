@@ -1,0 +1,20 @@
+{
+  "name": "lineup",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "LINEUP — build the sequence, break the pitcher.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "qa": "node scripts/qa.mjs",
+    "play-runs": "node scripts/play-runs.mjs",
+    "balance": "node scripts/balance.mjs",
+    "sweep": "node scripts/sweep.mjs",
+    "prebuild": "node scripts/qa.mjs"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}
