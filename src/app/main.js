@@ -7,6 +7,7 @@ import {
   boardSetup,
   battingOrder,
   stuffAgainst,
+  beatsWall,
   modifiersFor,
   zoneOf,
   lookAt,
@@ -35,9 +36,9 @@ const RESULT = {
   HR:  { word: 'HOME RUN', kind: 'hit', tell: 'HITS IT OUT' },
 };
 const STATE_BANNER = {
-  LABORING: "HE'S LABORING",
-  GASSED: "HE'S GASSED",
-  BROKEN: "HE'S BROKEN",
+  LABORING: 'PITCHER IS LABORING',
+  GASSED: 'PITCHER IS GASSED',
+  BROKEN: 'PITCHER IS BROKEN',
 };
 const RULES_KEY = 'lineup.hideRules';
 
@@ -46,15 +47,15 @@ const RULES_KEY = 'lineup.hideRules';
 function tellFor(r, info) {
   const bits = [];
   if (!r.reached) {
-    if (info.pit.efficient) bits.push("outs don't cost him");
-    else if (info.damage > 0) bits.push(`still costs him · −${info.damage}`);
-    else if (info.state === 'FRESH') bits.push('he was Fresh');
+    if (info.pit.efficient) bits.push("outs don't cost the pitcher");
+    else if (info.damage > 0) bits.push(`still costs the pitcher · −${info.damage}`);
+    else if (info.state === 'FRESH') bits.push('the pitcher was Fresh');
     else bits.push('put away');
-    if (info.seen > 0) bits.push("he's seen this bat");
+    if (info.seen > 0) bits.push('the pitcher has seen this bat');
   } else {
     if (r.stretch) bits.push('stretches it');
-    else if (info.mods?.some((m) => m.key === 'SLUGGER')) bits.push('feeds on fatigue');
-    else if (info.mods?.some((m) => m.key === 'RALLY')) bits.push('heat with runners on');
+    else if (info.mods?.some((m) => m.key === 'SLUGGER')) bits.push('+3 STAM DMG');
+    else if (info.mods?.some((m) => m.key === 'RALLY')) bits.push('runners on');
     else if (r.type === 'HR') bits.push('clears the yard');
     else if (r.type === '2B') bits.push('hard contact');
     else if (r.type === '1B') bits.push('puts it in play');
@@ -549,11 +550,13 @@ function enterDugoutPhase() {
 /* =================== render =================== */
 const $ = (s) => document.querySelector(s);
 const sign = (v) => `${v > 0 ? '+' : ''}${v}`;
+/* Every number is named for what it does: POW is shown as STAM DMG everywhere. */
+const KEY_LBL = { HIT: 'HIT', POW: 'STAM DMG' };
 /* Gear tags stay short; outs get spelled out so "+1 OUT" never reads as handing him an out. */
 const modStr = (g) => Object.entries(g.mods)
-  .map(([k, v]) => (k === 'OUT' ? `OUTS COST ${sign(v)}` : `${sign(v)} ${k}`)).join('  ');
+  .map(([k, v]) => (k === 'OUT' ? `OUTS COST PITCHER ${sign(v)}` : `${sign(v)} ${KEY_LBL[k] || k}`)).join('  ');
 const modLong = (g) => Object.entries(g.mods)
-  .map(([k, v]) => (k === 'OUT' ? `his outs cost ${sign(v)}` : `${sign(v)} ${k}`)).join(', ');
+  .map(([k, v]) => (k === 'OUT' ? `outs cost the pitcher ${sign(v)}` : `${sign(v)} ${KEY_LBL[k] || k}`)).join(', ');
 
 /** One-line gimmick the player shops against — ability language, not numbers. */
 function gimmickLine(p) {
@@ -609,6 +612,22 @@ function upgradeableLineages() {
 }
 const UP_CHEV = '<span class="up-chev" aria-hidden="true"></span>';
 
+/** Exact read vs tonight's pitcher: the first state where this HIT beats the pitch.
+    Pass effective HIT on lineup cards (zone/gear/links already in); draft uses the raw card. */
+const STATE_SEQ = ['FRESH', 'LABORING', 'GASSED', 'BROKEN'];
+function vsArmRow(hit, { effective = false } = {}) {
+  const pit = pitcherOf(S.rung);
+  const at = STATE_SEQ.find((st) => beatsWall(hit, stuffAgainst(pit, st, 0)));
+  const label = at ? `HIT clears ${STATE_INFO[at].label} pitch` : 'HIT never clears pitch';
+  const cls = at === 'FRESH' ? 'ok' : at ? 'mid' : 'no';
+  const tip = effective
+    ? "This bat's HIT (with seat, gear, links) vs tonight's pitch"
+    : "Card HIT vs tonight's pitch — before seat, gear and link bonuses";
+  return `<div class="vs-arm" title="${tip}">
+    <span class="vsw ${cls}">${label}</span>
+  </div>`;
+}
+
 function renderDraft() {
   const live = $('#draft-gold-live');
   if (live) live.innerHTML = `${S.owned.length} roster · <span class="gold-ico"></span>${S.gold}`;
@@ -643,11 +662,12 @@ function renderDraft() {
       <div class="pc-body">
         <div class="pname">${item.n}</div>
         <div class="pmeta">${item.y} · ${item.team}${isUp ? ' · Upgrade' : ''}</div>
-        <div class="prole" title="${ARCH_INFO[item.arch].ability}">${ARCH_INFO[item.arch].role}</div>
         <div class="bignums">
           <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">${item.HIT}</span></div>
-          <div class="bignum k-POW"><span class="bn-lbl">POW</span><span class="bn-v">${item.POW}</span></div>
+          <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">${item.POW}</span></div>
         </div>
+        ${vsArmRow(item.HIT)}
+        <div class="prole" title="${ARCH_INFO[item.arch].ability}">${ARCH_INFO[item.arch].role}</div>
         <div class="pc-cost-row ${afford ? 'afford' : ''}">${locked ? 'Owned' : `<span class="gold-ico"></span>${cost}`}</div>
       </div>
       <div class="stamp"></div>
@@ -753,12 +773,11 @@ function renderBoard() {
       <div class="pc-head"><span class="ord">${i + 1}</span></div>
       <div class="pc-body empty-body">
         <div class="pname muted">${i + 1}</div>
-        <div class="pmeta">${zone.label}</div>
         <div class="bignums">
           <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">—</span></div>
-          <div class="bignum k-POW"><span class="bn-lbl">POW</span><span class="bn-v">—</span></div>
+          <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">—</span></div>
         </div>
-        <div class="zline">${zone.gives}</div>
+        <div class="zline" title="${zone.label}">${zone.label} · ${zone.gives}</div>
       </div>
       <div class="track empty-track"></div>
       <div class="stamp"></div>
@@ -776,7 +795,7 @@ function renderBoard() {
     const stats = ['HIT', 'POW'].map((k) => {
       const v = Math.round(e[k]), d = e[k] - base[k];
       return `<div class="bignum k-${k}">
-        <span class="bn-lbl">${k}</span>
+        <span class="bn-lbl">${KEY_LBL[k]}</span>
         <span class="bn-v ${d > 0 ? 'up' : d < 0 ? 'dn' : ''}">${v}</span>
       </div>`;
     }).join('');
@@ -799,9 +818,9 @@ function renderBoard() {
       <div class="pc-body">
         <div class="pname">${p.n}</div>
         <div class="pmeta">${p.y} · ${p.team}</div>
-        <div class="prole" title="${ARCH_INFO[p.arch].ability}">${ARCH_INFO[p.arch].role}</div>
         <div class="bignums">${stats}</div>
-        <div class="zline" title="${zone.label} — ${zone.gives}">${zone.label} · ${zone.gives}</div>
+        ${vsArmRow(e.HIT, { effective: true })}
+        <div class="prole" title="${ARCH_INFO[p.arch].ability}">${ARCH_INFO[p.arch].role}</div>
       </div>
       <div class="track" data-track="${p.id}">${items}${cells}</div>
       ${chips}
@@ -926,6 +945,7 @@ function renderOpponent() {
   } else if (!S.playing && S.phase !== 'playing') {
     setStamina(p.pool, p.pool);
   }
+  if (!S.playing) setWall(freshWall());
 }
 
 /** Dugout / pre-play: full tank, label Warming up — Fresh only after first pitch. */
@@ -938,38 +958,118 @@ function setWarmingUp(pool) {
   st.className = 'stam-state s-WARMING';
   const num = $('#stam-num');
   if (num) num.textContent = `${pool} / ${pool}`;
+  placeWallBadge(100);
 }
+
+/* --- the PITCH badge: one labeled red number riding the stamina bar's edge.
+       A bat gets on when its HIT beats this. It rides the fill, so emptying
+       the pitcher's stamina visibly drags the pitch down with it. --- */
+function setWall(n, { flash = false } = {}) {
+  const badge = $('#wall-badge');
+  const num = $('#wall-num');
+  if (!badge || !num) return;
+  const v = String(Math.max(0, Math.round(n)));
+  const changed = num.textContent !== v;
+  num.textContent = v;
+  if ((flash || changed) && !REDUCED) {
+    badge.classList.remove('flash');
+    void badge.offsetWidth;
+    badge.classList.add('flash');
+  }
+}
+/** Keep the pitch badge pinned to the fill edge. */
+function placeWallBadge(pct) {
+  const badge = $('#wall-badge');
+  if (badge) badge.style.left = `${Math.max(5, Math.min(95, pct))}%`;
+}
+/** Tonight's Fresh pitch — what the draft shops against. */
+const freshWall = () => stuffAgainst(pitcherOf(S.rung), 'FRESH', 0);
 
 /** His tank and state — the only pitcher numbers the player watches. */
 function setStamina(stamina, pool) {
   const state = stateOf(stamina, pool);
+  const pct = Math.max(0, stamina / pool * 100);
   const fill = $('#stam-fill');
-  fill.style.width = `${Math.max(0, stamina / pool * 100)}%`;
+  fill.style.width = `${pct}%`;
   fill.className = `stam-fill s-${state}`;
   const st = $('#stam-state');
   st.textContent = STATE_INFO[state].label;
   st.className = `stam-state s-${state}`;
   const num = $('#stam-num');
   if (num) num.textContent = `${Math.round(stamina)} / ${pool}`;
+  placeWallBadge(pct);
 }
 
-/** amount > 0: wear float. freeOut: muted "0" so Maddux's gimmick lands in the moment. */
-function drainFloat(amount, { freeOut = false } = {}) {
+/** amount > 0: wear float. freeOut: muted "0" so Maddux's gimmick lands in the moment.
+    kind: 'pow' (contact bite) | 'wear' (out-tax) — different ink so the two drains read apart. */
+function drainFloat(amount, { freeOut = false, kind = 'pow' } = {}) {
   if (REDUCED) return;
   if (amount <= 0 && !freeOut) return;
   const bar = $('#stam-bar');
+  if (!bar) return;
   const r = bar.getBoundingClientRect();
   const el = document.createElement('div');
-  el.className = freeOut ? 'drain-float free' : 'drain-float';
+  el.className = freeOut ? 'drain-float free' : `drain-float ${kind === 'wear' ? 'wear' : 'pow'}`;
   el.textContent = freeOut ? '0' : `−${Math.round(amount)}`;
   el.style.left = `${r.left + r.width * (0.15 + Math.random() * 0.6)}px`;
   el.style.top = `${r.top - 6}px`;
   el.style.position = 'fixed';
   document.body.appendChild(el);
   if (!freeOut) {
-    bar.classList.remove('hitflash'); void bar.offsetWidth; bar.classList.add('hitflash');
+    bar.classList.remove('hitflash', 'wearflash');
+    void bar.offsetWidth;
+    bar.classList.add(kind === 'wear' ? 'wearflash' : 'hitflash');
   }
   setTimeout(() => el.remove(), 950);
+}
+
+/** POW / OUT drain flies from the bat into his tank — the glossary without words.
+    The −N itself makes the trip, so the number on the card is the number that lands. */
+function stamBite(fromEl, amount, { kind = 'pow', freeOut = false } = {}) {
+  if (freeOut) { drainFloat(0, { freeOut: true }); return; }
+  if (!(amount > 0)) return;
+  const bar = $('#stam-bar');
+  if (!bar || !fromEl || REDUCED) { drainFloat(amount, { kind }); return; }
+  const a = ctr(fromEl);
+  const b = ctr(bar);
+  const dur = 560;
+
+  const chip = document.createElement('span');
+  chip.className = `dmg-chip ${kind}`;
+  chip.textContent = `−${Math.round(amount)}`;
+  chip.style.left = `${a.x}px`;
+  chip.style.top = `${a.y}px`;
+  document.body.appendChild(chip);
+  requestAnimationFrame(() => {
+    chip.style.transition = `transform ${dur}ms cubic-bezier(.3,.9,.35,1), opacity 160ms ease ${dur - 120}ms`;
+    chip.style.transform = `translate(-50%,-50%) translate(${b.x - a.x}px, ${b.y - a.y}px) scale(.75)`;
+    chip.style.opacity = '0';
+  });
+  setTimeout(() => chip.remove(), dur + 120);
+
+  // A few loose bits ride along so the chip reads as matter leaving the bat.
+  const n = Math.min(8, Math.max(2, Math.round(amount * 0.6)));
+  const colors = kind === 'wear'
+    ? ['#B4764A', '#8C5836', '#C4895A']
+    : ['#FFB347', '#FFCE7A', '#FFF0CE'];
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('span');
+    el.className = `stam-bit ${kind}`;
+    el.style.left = `${a.x + (Math.random() - 0.5) * 18}px`;
+    el.style.top = `${a.y + (Math.random() - 0.5) * 18}px`;
+    el.style.background = colors[i % colors.length];
+    document.body.appendChild(el);
+    const delay = i * 34;
+    const jx = (Math.random() - 0.5) * 44;
+    requestAnimationFrame(() => {
+      el.style.transition = `transform ${dur}ms cubic-bezier(.22,1,.36,1) ${delay}ms, opacity ${dur}ms ease ${delay}ms`;
+      el.style.transform = `translate(${b.x - a.x + jx}px, ${b.y - a.y}px) scale(.55)`;
+      el.style.opacity = '0';
+    });
+    setTimeout(() => el.remove(), dur + 220 + delay);
+  }
+  // Float lands as the chip arrives.
+  setTimeout(() => drainFloat(amount, { kind }), dur - 60);
 }
 
 function renderTray() {
@@ -1579,10 +1679,10 @@ function boostList(slot, e, info) {
     out.push({ cls: 'b-heat', text: m.label.toUpperCase(), note: m.detail });
   }
   const si = STATE_INFO[info.state];
-  if (info.state === 'FRESH') out.push({ cls: 'b-cold', text: 'HE IS FRESH', note: 'wear him down', cold: true });
-  else out.push({ cls: 'b-tired', text: `HE IS ${si.label.toUpperCase()}`, note: 'the lineup opens up' });
+  if (info.state === 'FRESH') out.push({ cls: 'b-cold', text: 'PITCHER IS FRESH', note: 'wear the pitcher down', cold: true });
+  else out.push({ cls: 'b-tired', text: `PITCHER IS ${si.label.toUpperCase()}`, note: 'the lineup opens up' });
   if (info.seen > 0) {
-    out.push({ cls: 'b-cold', text: info.look.label.toUpperCase(), note: 'he has a read on this bat', cold: true });
+    out.push({ cls: 'b-cold', text: info.look.label.toUpperCase(), note: 'the pitcher has a read on this bat', cold: true });
   }
   return out.slice(0, 4);
 }
@@ -1606,26 +1706,102 @@ async function showBoosts(card, list) {
   return host;
 }
 
-/** Countbar fills, card loads up, then the pitch. */
+/* --- the stat cells are the actors: live values, pops, and flying chips --- */
+const bigCell = (card, k) => card?.querySelector(`.bignum.k-${k}`);
+
+/** Write a live value into a card's HIT/POW cell. base = the printed card stat. */
+function setBig(card, k, v, base, { quiet = false } = {}) {
+  const cell = bigCell(card, k);
+  const el = cell?.querySelector('.bn-v');
+  if (!el) return;
+  const next = String(Math.round(v));
+  const changed = el.textContent !== next;
+  el.textContent = next;
+  el.classList.toggle('up', v > base);
+  el.classList.toggle('dn', v < base);
+  if (changed && !quiet && !REDUCED) {
+    cell.classList.remove('tick');
+    void cell.offsetWidth;
+    cell.classList.add('tick');
+  }
+}
+
+/** Pop a cell — this stat is the one doing the work right now. */
+function fireCell(cell, cls = 'firing') {
+  if (!cell || REDUCED) return;
+  cell.classList.remove('firing', 'lost');
+  void cell.offsetWidth;
+  cell.classList.add(cls);
+}
+
+/** A labeled chip that flies from one element to another (HIT to the duel, wall to the duel). */
+function statChip(fromEl, toEl, text, kind = 'hit', dur = 480) {
+  if (REDUCED || !fromEl || !toEl) return;
+  const a = ctr(fromEl), b = ctr(toEl);
+  const el = document.createElement('span');
+  el.className = `stat-chip ${kind}`;
+  el.textContent = text;
+  el.style.left = `${a.x}px`;
+  el.style.top = `${a.y}px`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => {
+    el.style.transition = `transform ${dur}ms cubic-bezier(.3,.9,.35,1), opacity 150ms ease ${dur - 100}ms`;
+    el.style.transform = `translate(-50%,-50%) translate(${b.x - a.x}px, ${b.y - a.y}px) scale(.6)`;
+    el.style.opacity = '0';
+  });
+  setTimeout(() => el.remove(), dur + 100);
+}
+
+/* --- the duel at the mound: HIT vs WALL, exact numbers, one winner ---
+   The encounter happens in the middle of the diamond, where the play actually is:
+   the bat's HIT slides in from the order, his WALL slides in from the stamina bar,
+   and whichever number is bigger wins. Nothing is rolled. */
+function duelEls() {
+  const host = $('#duel');
+  return host ? { host, hit: $('#duel-hit'), wall: $('#duel-wall') } : null;
+}
+function duelShow(hit, wall) {
+  const d = duelEls();
+  if (!d) return;
+  d.host.className = 'duel live';
+  d.hit.textContent = hit;
+  d.wall.textContent = wall;
+}
+function duelResolve(reached) {
+  const d = duelEls();
+  if (!d) return;
+  d.host.classList.add(reached ? 'bat-wins' : 'arm-wins');
+}
+function duelHide() {
+  const d = duelEls();
+  if (d) d.host.className = 'duel';
+}
+
+/** He answers an out with a green pulse — the wall held, no harm done. */
+function barHeld() {
+  const bar = $('#stam-bar');
+  if (!bar || REDUCED) return;
+  bar.classList.remove('held', 'hitflash', 'wearflash');
+  void bar.offsetWidth;
+  bar.classList.add('held');
+}
+
+/** Countbar fills while the duel is up at the mound; then the card swings. */
 async function windup(card) {
   const bar = card.querySelector('.countbar i');
   const dur = PACE.windup / (SPEEDS[speedIdx] * TURBO);
   audio.windup();
   card.classList.add('loading');
-  if (bar) {
-    bar.style.width = '0';
-    const t0 = performance.now();
-    await new Promise((res) => {
-      const step = (now) => {
-        const k = Math.min(1, (now - t0) / dur);
-        bar.style.width = `${k * 100}%`;
-        if (k < 1) requestAnimationFrame(step); else res();
-      };
-      requestAnimationFrame(step);
-    });
-  } else {
-    await hold(PACE.windup);
-  }
+  if (bar) bar.style.width = '0';
+  const t0 = performance.now();
+  await new Promise((res) => {
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      if (bar) bar.style.width = `${k * 100}%`;
+      if (k < 1) requestAnimationFrame(step); else res();
+    };
+    requestAnimationFrame(step);
+  });
   card.classList.remove('loading');
   card.classList.add('swing');
   audio.tick();
@@ -1643,7 +1819,10 @@ function clearResults() {
   renderScorecard();
   document.querySelectorAll('.countbar i').forEach((b) => b.style.width = '0');
   document.querySelectorAll('#innings .inn-pip').forEach((f) => f.classList.remove('on', 'live'));
-  document.querySelectorAll('.pc').forEach((c) => c.classList.remove('at-bat', 'link-hot', 'loading', 'swing'));
+  document.querySelectorAll('.pc').forEach((c) => {
+    c.classList.remove('at-bat', 'link-hot', 'loading', 'swing');
+  });
+  duelHide();
   document.querySelectorAll('.boosts').forEach((b) => b.remove());
   document.querySelectorAll('.stamp').forEach((s) => { s.className = 'stamp'; s.textContent = ''; });
   document.querySelectorAll('.tell').forEach((t) => { t.classList.remove('show'); t.textContent = ''; });
@@ -1657,6 +1836,7 @@ function clearResults() {
   $('#verdict-top').innerHTML = '';
   const p = pitcherOf(S.rung);
   setStamina(p.pool, p.pool);
+  setWall(freshWall());
 }
 
 function showVerdict(kind, topHtml) {
@@ -1689,6 +1869,7 @@ async function playRound() {
   const logLines = [];
   const looks = Array(9).fill(0);
   let stamina = pit.pool, pos = 0, totalRuns = 0, totalDrain = 0, brokeInning = 0;
+  let tankTimer = 0; // pending delayed bar paint — the tank chips when the −N arrives
   const inningRuns = [];
 
   try {
@@ -1700,7 +1881,7 @@ async function playRound() {
         stamina = Math.min(pit.pool, stamina + pit.recover);
         if (stamina > before) {
           setStamina(stamina, pit.pool);
-          logLines.push(`<span class="inn-div">He catches his breath — <b>+${Math.round(stamina - before)}</b> stamina back</span>`);
+          logLines.push(`<span class="inn-div">The pitcher catches his breath — <b>+${Math.round(stamina - before)}</b> stamina back</span>`);
           await hold(PACE.stateHold);
         }
       }
@@ -1728,35 +1909,68 @@ async function playRound() {
         const mods = modifiersFor(e, stateBefore, { runners });
         const ctx = { runners, state: stateBefore, mods, noOutDamage: pit.efficient };
 
-        // Next batter is up: clear every prior stamp so only this AB can leave a mark.
+        // Next batter is up: clear every prior stamp / duel so only this AB can leave a mark.
+        duelHide();
         document.querySelectorAll('.pc').forEach((c) => {
           c.classList.remove('at-bat', 'link-hot');
           clearTell(c);
           const s = c.querySelector('.stamp');
           if (s) { s.className = 'stamp'; s.textContent = ''; }
         });
+        // Cells fall back to their resting effective values once a bat steps out.
+        document.querySelectorAll('#board .pc[data-player]').forEach((c) => {
+          const cs = +c.dataset.slot, ce = eff[cs], cp = S.lineup[cs];
+          if (!ce || !cp) return;
+          setBig(c, 'HIT', ce.HIT, cp.HIT, { quiet: true });
+          setBig(c, 'POW', ce.POW, cp.POW, { quiet: true });
+          ['HIT', 'POW'].forEach((k) => bigCell(c, k)?.classList.remove('firing', 'lost', 'tick'));
+        });
         document.querySelectorAll('.boosts').forEach((b) => b.remove());
         card.classList.add('at-bat');
         setStamina(stamina, pit.pool);
+        // The wall this bat faces right now — his stuff, his state, his read on this bat.
+        setWall(stuff);
         const stampEl = card.querySelector('.stamp');
         clearTell(card);
 
         // 1. links, abilities, and his state — no duel math
         const boostHost = await showBoosts(card, boostList(slot, e, { mods, state: stateBefore, seen, look }));
 
-        // 2. the windup and the pitch — labels clear as he delivers so the
-        //    stamina bar is unobstructed when the result lands
-        await windup(card);
-        boostHost?.remove();
-
-        // 3. the result
+        // 2. the duel at the mound — exact numbers, no roll: the bat's HIT slides in
+        //    from the card, his WALL slides in from the stamina bar, bigger number wins.
         const r = resolvePA(e, stuff, ctx, rng);
+        setBig(card, 'HIT', r.hit, p.HIT);
+        setBig(card, 'POW', r.pow, p.POW);
+        const hitCell = bigCell(card, 'HIT');
+        const powCell = bigCell(card, 'POW');
+        fireCell(hitCell);
+        setWall(stuff, { flash: true });
+        duelShow(r.hit, stuff);
+        statChip(hitCell, $('#duel-hit'), r.hit, 'hit');
+        statChip($('#wall-badge'), $('#duel-wall'), stuff, 'arm');
+        await windup(card);
+        duelResolve(r.reached);
+        boostHost?.remove();
+        // The verdict lands on the stat that was tested.
+        if (r.reached) fireCell(hitCell);
+        else { fireCell(hitCell, 'lost'); barHeld(); }
+
+        // 3. the result — STAM DMG bites the tank; OUT wear is a different clay trail
         const d = Math.min(stamina, r.damage); // an empty tank cannot lose more
         stamina -= d;
         totalDrain += d;
-        setStamina(stamina, pit.pool);
         const freeOut = !r.reached && pit.efficient;
-        drainFloat(d, { freeOut });
+        const drainKind = r.reached ? 'pow' : 'wear';
+        if (r.reached && d > 0) fireCell(powCell);
+        stamBite(r.reached ? ($('#duel') || card) : card, d, { kind: drainKind, freeOut });
+        // The tank visibly chips when the −N arrives, not before.
+        clearTimeout(tankTimer);
+        if (!REDUCED && d > 0) {
+          const shown = stamina;
+          tankTimer = setTimeout(() => setStamina(shown, pit.pool), 480);
+        } else {
+          setStamina(stamina, pit.pool);
+        }
         const stateAfter = stateOf(stamina, pit.pool);
 
         const cause = tellFor(r, {
@@ -1796,14 +2010,24 @@ async function playRound() {
           });
           fireLinksInto(slot); // the ropes that fed this bat just got paid
           const c = ctr(card);
+          // Weight the contact flash by POW so hard contact reads as power, not just "a hit."
+          const pow = r.pow || e.POW || 1;
+          const arcPow = r.type === 'HR' ? 4.2
+            : r.type === '2B' ? 2.4 + Math.min(1.2, pow / 12)
+            : 1 + Math.min(1.4, pow / 10);
           if (r.type === 'HR') {
             audio.homer(); fireworks(card); shake();
-            ring(c.x, c.y, { c: '255,240,206', r1: 340, life: 900, w: 6 });
-            ballArc(card, 4); linkField.flashAll(1.1);
+            ring(c.x, c.y, { c: '255,240,206', r1: 280 + pow * 8, life: 900, w: 6 });
+            ballArc(card, arcPow); linkField.flashAll(1.1);
           } else {
             audio.crack(); chalkPuff(card);
-            ring(c.x, c.y, { c: '255,179,71', r1: 150 + r.bases * 40, life: 620, w: 4 });
-            ballArc(card, r.bases);
+            ring(c.x, c.y, {
+              c: r.type === '2B' ? '255,206,122' : '255,179,71',
+              r1: 110 + pow * 10 + r.bases * 28,
+              life: 560 + pow * 18,
+              w: 3 + Math.min(3, pow / 5),
+            });
+            ballArc(card, arcPow);
             if (scored) audio.cheer(false);
           }
           if (chain > 1) audio.rally(chain);
@@ -1841,7 +2065,7 @@ async function playRound() {
         }
       }
       if (outs < 3 && !walkOff) {
-        logLines.push(`<span class="inn-div">Side retired — he escapes the inning</span>`);
+        logLines.push(`<span class="inn-div">Side retired — the pitcher escapes the inning</span>`);
       }
       theField()?.strand(); // whoever is left on walks off as the inning turns
       inningRuns.push(runs);
@@ -1856,13 +2080,13 @@ async function playRound() {
     const topLook = Math.max(...looks);
     $('#summary').innerHTML =
       `You scored <b>${totalRuns}</b> (${inningRuns.join(' · ')} by inning) and needed <b>${rung.target}</b>. ` +
-      `Your <b>${order.length}</b> bats emptied <b>${Math.round(totalDrain)}</b> of his stamina — he finished <b>${STATE_INFO[finalState].label}</b>` +
+      `Your <b>${order.length}</b> bats emptied <b>${Math.round(totalDrain)}</b> of the pitcher's stamina — the pitcher finished <b>${STATE_INFO[finalState].label}</b>` +
       `${brokeInning ? `, broken in inning <b>${brokeInning}</b>` : ''}. ` +
       (topLook < 3
-        ? `No bat came up more than <b>${topLook}×</b>, so he never got much of a read.`
+        ? `No bat came up more than <b>${topLook}×</b>, so the pitcher never got much of a read.`
         : order.length < 8
-          ? `He got up to <b>${topLook} looks</b> at the same bat. <b>More seats spread the looks out.</b>`
-          : `Long innings got him up to <b>${topLook} looks</b> at some bats — a bat he has seen is easier for him.`);
+          ? `The pitcher got up to <b>${topLook} looks</b> at the same bat. <b>More seats spread the looks out.</b>`
+          : `Long innings gave the pitcher up to <b>${topLook} looks</b> at some bats — a bat the pitcher has seen is easier to put away.`);
 
     finishRound(totalRuns, rung, finalState, brokeInning);
   } catch (err) {
@@ -1909,9 +2133,9 @@ function finishRound(runs, rung, finalState, brokeInning) {
     const next = LADDER[S.rung + 1];
     const np = PITCHERS.find((p) => p.id === next.pitcher);
     showVerdict('win', `<div class="v-title">YOU WIN</div>
-      <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>${brokeInning ? ` — and you <b>broke him</b> in inning ${brokeInning}` : ''}.
+      <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>${brokeInning ? ` — and you <b>broke the pitcher</b> in inning ${brokeInning}` : ''}.
       Earned <span class="v-reward">+${pay}g</span> (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.<br>
-      Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Draft before you face him.'}</div>
+      Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Draft before the next pitcher.'}</div>
       <button class="act go" id="advance" style="flex:0 0 auto">DRAFT · NEXT ARM</button>`);
     audio.win(); confetti();
     renderWallet(); updatePlayButton();
@@ -1921,10 +2145,10 @@ function finishRound(runs, rung, finalState, brokeInning) {
   S.lives -= 1;
   S.gold += ECONOMY.lossGold;
   const excuse = finalState === 'FRESH'
-    ? 'He never left Fresh — draft wear (grinders, sponsor gear that makes outs cost him) or fill more seats.'
+    ? 'The pitcher never left Fresh — draft wear (Grinders, sponsor gear that makes outs cost the pitcher) or fill more seats.'
     : finalState === 'BROKEN'
-      ? 'You broke him but could not cash it in — resequence so Sluggers and Rally men feast on the collapse.'
-      : `He finished ${STATE_INFO[finalState].label} — close. Draft, rebuild, try again.`;
+      ? 'You broke the pitcher but could not cash it in — resequence so Sluggers and Rally men feast on the collapse.'
+      : `The pitcher finished ${STATE_INFO[finalState].label} — close. Draft, rebuild, try again.`;
 
   if (S.lives <= 0) {
     S.phase = 'dead';
@@ -1939,10 +2163,10 @@ function finishRound(runs, rung, finalState, brokeInning) {
   }
 
   S.phase = 'lost';
-  showVerdict('lose', `<div class="v-title">HE HELD YOU</div>
+  showVerdict('lose', `<div class="v-title">THE PITCHER HELD YOU</div>
     <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>. Lost a life — <b>${S.lives}</b> left.
     Consolation <span class="v-reward">+${ECONOMY.lossGold}g</span> (now <b>${S.gold}g</b>).<br>
-    ${excuse} Same arm is waiting — draft and try again.</div>
+    ${excuse} The same pitcher is waiting — draft and try again.</div>
     <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO DRAFT</button>`);
   audio.lose();
   renderWallet(); updatePlayButton();

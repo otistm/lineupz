@@ -1,6 +1,6 @@
 /**
- * QA gates for quiet resolution + draft/sponsor meta.
- * 1. Correctness — under-the-hood rolls stay sane
+ * QA gates for exact (deterministic) resolution + draft/sponsor meta.
+ * 1. Correctness — nothing rolls; every outcome is the numbers
  * 2. Draft / sponsors / lineage upgrades
  * 3. Design — seats, sequence and gear are the levers
  */
@@ -9,7 +9,7 @@ import {
   boardSetup,
   battingOrder,
   computeLinks,
-  contactChance,
+  beatsWall,
   stuffAgainst,
   modifiersFor,
   zoneOf,
@@ -17,8 +17,8 @@ import {
   resolvePA,
   advanceRunners,
   stateOf,
-  CONTACT_BASE,
-  CONTACT_STEP,
+  DOUBLE_AT,
+  HOMER_AT,
 } from '../src/engine/sim.js';
 import {
   generateDraft,
@@ -50,37 +50,19 @@ function check(name, ok, detail) {
   if (!ok) failed++;
 }
 
-function winRate(lineup, gearMap, pitcher, target, N, seed) {
-  const rng = mulberry32(seed);
-  let wins = 0, broke = 0;
-  for (let i = 0; i < N; i++) {
-    const r = simNight(lineup, gearMap, pitcher, rng);
-    if (r.runs >= target) wins++;
-    if (r.broke) broke++;
-  }
-  return { win: wins / N, broke: broke / N };
-}
+const rng0 = () => 0; // the engine never rolls — any rng is ignored
+const night = (lineup, gearMap, pid) => simNight(lineup, gearMap, P(pid), rng0);
 
-/* ---------- quiet contact rule (engine-only; not player-facing) ---------- */
+/* ---------- the one rule: beat his wall — exact, no rolls ---------- */
 {
-  check('even HIT vs stuff is the quiet base', Math.abs(contactChance(5, 5) - CONTACT_BASE) < 1e-9);
-  check('each point of difference is the quiet step',
-    Math.abs(contactChance(7, 5) - (CONTACT_BASE + 2 * CONTACT_STEP)) < 1e-9,
-    `HIT 7 vs stuff 5 = ${(contactChance(7, 5) * 100).toFixed(0)}%`);
-  check('contact chance is monotonic and clamped',
-    contactChance(1, 12) >= 0.05 && contactChance(14, 0) <= 0.9 && contactChance(8, 4) > contactChance(6, 4));
-
-  const rng = mulberry32(3);
-  const bat = { HIT: 6, POW: 5, OUT: 0, arch: 'SPARK' };
-  const rate = (stuff) => {
-    let on = 0;
-    const N = 40000;
-    for (let i = 0; i < N; i++) if (resolvePA(bat, stuff, { runners: 0, state: 'FRESH' }, rng).reached) on++;
-    return on / N;
-  };
-  const got = rate(6);
-  check('resolvePA obeys contactChance', Math.abs(got - contactChance(6, 6)) < 0.01,
-    `rolled ${(got * 100).toFixed(1)}% vs stated ${(contactChance(6, 6) * 100).toFixed(0)}%`);
+  check('a bat is on iff HIT beats the wall', beatsWall(8, 7) && !beatsWall(7, 7) && !beatsWall(6, 7));
+  const bat = { HIT: 6, POW: 5, OUT: 0, arch: 'RALLY' };
+  const over = resolvePA(bat, 5, { runners: 0, state: 'FRESH' }, rng0);
+  const even = resolvePA(bat, 6, { runners: 0, state: 'FRESH' }, rng0);
+  check('HIT over the wall is on; matching it is out', over.reached && !even.reached,
+    `HIT 6 vs wall 5 on, vs wall 6 out`);
+  const again = resolvePA(bat, 5, { runners: 0, state: 'FRESH' }, rng0);
+  check('identical inputs, identical outcome', JSON.stringify(over) === JSON.stringify(again));
 }
 
 /* ---------- fatigue and familiarity, both in STUFF ---------- */
@@ -95,42 +77,40 @@ function winRate(lineup, gearMap, pitcher, target, N, seed) {
     stuffAgainst(p, 'GASSED', 0) - p.stuff > stuffAgainst(k, 'GASSED', 0) - k.stuff);
 }
 
-/* ---------- damage: POW is the hit, and how far it goes ---------- */
+/* ---------- damage: STAM DMG is exactly the number on the card ---------- */
 {
-  const rng = mulberry32(9);
-  const soft = { HIT: 20, POW: 2, OUT: 0, arch: 'GRINDER' };
-  const big = { HIT: 20, POW: 12, OUT: 0, arch: 'SLUGGER' };
-  const run = (e) => {
-    let dmg = 0, homers = 0;
-    const N = 20000;
-    for (let i = 0; i < N; i++) {
-      const r = resolvePA(e, 0, { runners: 0, state: 'FRESH' }, rng);
-      dmg += r.damage; if (r.type === 'HR') homers++;
-    }
-    return { dmg: dmg / N, hr: homers / N };
-  };
-  const a = run(soft), b = run(big);
-  check('POW is the damage', b.dmg > a.dmg * 2.5, `pow 2 → ${a.dmg.toFixed(1)}, pow 12 → ${b.dmg.toFixed(1)}`);
-  check('only a stacked bat leaves the yard', a.hr === 0 && b.hr > 0.1, `pow 12 homers ${(b.hr * 100).toFixed(0)}%`);
+  const pa = (pow) => resolvePA({ HIT: 20, POW: pow, OUT: 0, arch: 'GRINDER' }, 0, { runners: 0, state: 'FRESH' }, rng0);
+  check('STAM DMG is the damage, exactly', pa(2).damage === 2 && pa(7).damage === 7 && pa(12).damage === 12);
+  check('distance is read off the same number',
+    pa(DOUBLE_AT - 1).type === '1B' && pa(DOUBLE_AT).type === '2B' && pa(HOMER_AT).type === 'HR',
+    `1B under ${DOUBLE_AT}, 2B at ${DOUBLE_AT}, HR at ${HOMER_AT}`);
 
   const gr = { HIT: 0, POW: 3, OUT: 2, arch: 'GRINDER' };
-  const out = resolvePA(gr, 20, { runners: 0, state: 'FRESH' }, mulberry32(5));
+  const out = resolvePA(gr, 20, { runners: 0, state: 'FRESH' }, rng0);
   check("a grinder's out still costs him", !out.reached && out.damage === 2);
-  const vsMaddux = resolvePA(gr, 20, { runners: 0, state: 'FRESH', noOutDamage: true }, mulberry32(5));
+  const vsMaddux = resolvePA(gr, 20, { runners: 0, state: 'FRESH', noOutDamage: true }, rng0);
   check('Maddux pays nothing for outs', vsMaddux.damage === 0);
 }
 
-/* ---------- abilities ---------- */
+/* ---------- abilities — exact, never a roll ---------- */
 {
   const rally = { HIT: 5, POW: 4, OUT: 0, arch: 'RALLY' };
   const empty = modifiersFor(rally, 'FRESH', { runners: 0 });
   const loaded = modifiersFor(rally, 'FRESH', { runners: 3 });
   check('rally man scales with runners on', empty.length === 0 && loaded[0].HIT === 3 && loaded[0].POW === 3);
   const slug = { HIT: 5, POW: 7, OUT: 0, arch: 'SLUGGER' };
-  check('slugger only feeds once he is Gassed',
+  check('slugger only gets +3 STAM DMG once pitcher is Gassed',
     modifiersFor(slug, 'FRESH', { runners: 0 }).length === 0 &&
     modifiersFor(slug, 'GASSED', { runners: 0 })[0].POW === 3);
-  const a = advanceRunners([{ arch: 'SPARK' }, null, { arch: 'RALLY' }], { bases: 4, type: 'HR', reached: true }, { arch: 'SLUGGER' }, mulberry32(2));
+
+  const spark = { HIT: 9, POW: 2, OUT: 0, arch: 'SPARK' };
+  const fresh = resolvePA(spark, 4, { runners: 0, state: 'FRESH' }, rng0);
+  const tired = resolvePA(spark, 4, { runners: 0, state: 'LABORING' }, rng0);
+  check('spark stretches every single once the arm tires', fresh.type === '1B' && tired.type === '2B' && tired.stretch);
+  const legs = advanceRunners([{ arch: 'SPARK' }, null, null], { bases: 1, type: '1B', reached: true }, { arch: 'RALLY' }, rng0);
+  check('spark always takes the extra base on a single', legs.bases[2]?.arch === 'SPARK' && legs.bases[0]?.arch === 'RALLY');
+
+  const a = advanceRunners([{ arch: 'SPARK' }, null, { arch: 'RALLY' }], { bases: 4, type: 'HR', reached: true }, { arch: 'SLUGGER' }, rng0);
   check('home run scores everyone + batter', a.runs === 3 && a.bases.every((x) => x === null));
 }
 
@@ -139,8 +119,8 @@ function winRate(lineup, gearMap, pitcher, target, N, seed) {
   const lineup = Array(9).fill(H('bench72'));
   const { eff } = boardSetup(lineup, {});
   check('top of the order adds HIT', eff[0].HIT === H('bench72').HIT + 1);
-  check('the heart adds POW', eff[4].POW === H('bench72').POW + 2);
-  check('the bottom makes his outs cost', eff[7].OUT === 1 && zoneOf(8).key === 'BOTTOM');
+  check('the heart adds STAM DMG', eff[4].POW === H('bench72').POW + 2);
+  check('the bottom adds out STAM DMG', eff[7].OUT === 1 && zoneOf(8).key === 'BOTTOM');
 }
 
 /* ---------- seats and gaps ---------- */
@@ -150,15 +130,12 @@ function winRate(lineup, gearMap, pitcher, target, N, seed) {
   check('batting order skips empty seats', battingOrder(five).join(',') === '0,2,4,6,8');
   check('links follow the batting order across gaps', computeLinks(five).length > 0, `${computeLinks(five).length} links`);
 
-  const rng = mulberry32(21);
-  let dFive = 0, dNine = 0;
-  const p = P('koufax65');
-  for (let i = 0; i < 2000; i++) {
-    dFive += p.pool - simNight(five, {}, p, rng).stamina;
-    dNine += p.pool - simNight(nine, {}, p, rng).stamina;
-  }
-  check('a full order wears him down harder than a short one', dNine / dFive > 1.2,
-    `nine ${(dNine / 2000).toFixed(1)} vs five ${(dFive / 2000).toFixed(1)} stamina`);
+  // Looks are the tax on a short order: he learns the lone bat and closes the wall.
+  const solo = [H('ichiro04'), null, null, null, null, null, null, null, null];
+  const soloN = night(solo, {}, 'longman');
+  const nineN = night(nine, {}, 'longman');
+  check('he learns a short order — looks close the wall', soloN.runs <= 2 && nineN.runs > soloN.runs,
+    `solo ${soloN.runs} runs vs nine ${nineN.runs}`);
 }
 check('state thresholds ordered', stateOf(100, 100) === 'FRESH' && stateOf(50, 100) === 'LABORING' && stateOf(20, 100) === 'GASSED' && stateOf(5, 100) === 'BROKEN');
 {
@@ -221,7 +198,7 @@ check('state thresholds ordered', stateOf(100, 100) === 'FRESH' && stateOf(50, 1
     generateDraft(0, [], mulberry32(3)).some((o) => H(o.id).cost <= ECONOMY.startGold));
 }
 
-/* ---------- progression difficulty ---------- */
+/* ---------- progression difficulty — exact nights, no bands ---------- */
 const SCRAPPY = [H('ozzie87'), H('pudge99'), H('bench72'), H('griffey97'), H('schmidt80'), H('arod96'), null, null, null];
 const FUNDED = ['gwynn94', 'ruth27', 'ichiro04', 'williams41', 'gehrig27', 'mays65', 'morgan76', 'trout12', 'ozzie87'].map(H);
 const FUNDED_GEAR = {
@@ -231,37 +208,31 @@ const FUNDED_GEAR = {
   gwynn94: [G('cleats')],
   ichiro04: [G('ash'), G('helmet')],
 };
-const N = 3000;
 
 {
-  const { win } = winRate(SCRAPPY, {}, P('longman'), LADDER[0].target, N, 11);
-  check('scrappy board clears Opening Night in band', win >= 0.6 && win <= 0.95, `win ${(win * 100).toFixed(1)}% ∈ [60, 95]`);
+  const open = night(SCRAPPY, {}, 'longman');
+  check('scrappy board clears Opening Night', open.runs >= LADDER[0].target, `${open.runs} of ${LADDER[0].target}`);
+
+  // Maddux blanks a board with no wear and no wall-beaters — the wall holds, he stays Fresh.
+  const blank = night(SCRAPPY, {}, 'maddux95');
+  check('no height, no wear — the Surgeon blanks you', blank.runs === 0 && blank.finalState === 'FRESH',
+    `${blank.runs} runs, he finished ${blank.finalState}`);
+
+  const funded = night(FUNDED, FUNDED_GEAR, 'pedro00');
+  const weak = night(SCRAPPY, {}, 'pedro00');
+  check('funded wear board breaks Pedro and cashes in', funded.broke && funded.runs >= LADDER[4].target,
+    `${funded.runs} of ${LADDER[4].target}, he finished ${funded.finalState}`);
+  check('underfunded board is blanked by Pedro', weak.runs < LADDER[4].target, `${weak.runs} runs`);
 }
 {
-  const funded = winRate(FUNDED, FUNDED_GEAR, P('pedro00'), LADDER[4].target, N, 13).win;
-  const weak = winRate(SCRAPPY, {}, P('pedro00'), LADDER[4].target, N, 15).win;
-  check('funded board clears Pedro in band', funded >= 0.35 && funded <= 0.8, `win ${(funded * 100).toFixed(1)}%`);
-  check('underfunded board struggles vs Pedro', weak <= 0.25 && funded - weak >= 0.2,
-    `weak ${(weak * 100).toFixed(1)}% vs funded ${(funded * 100).toFixed(1)}%`);
-}
-{
-  /* seats you buy are the main lever: same tier, more of them */
-  const five = winRate([H('ozzie87'), H('pudge99'), H('bench72'), H('griffey97'), H('arod96'), null, null, null, null],
-    {}, P('koufax65'), LADDER[2].target, N, 17).win;
-  const nine = winRate(['ozzie87', 'pudge99', 'bench72', 'griffey97', 'arod96', 'schmidt80', 'gwynn94', 'gehrig27', 'rickey85'].map(H),
-    {}, P('koufax65'), LADDER[2].target, N, 17).win;
-  check('filling the order beats a short order', nine >= five * 1.5, `five ${(five * 100).toFixed(1)}% vs nine ${(nine * 100).toFixed(1)}%`);
-}
-{
-  /* same nine bats, same gear — only the order changes.
-     GOOD: grinders and sparks ahead of the bats they feed, sluggers in the heart.
-     BAD: pop wasted at the top, sparks wasted in the heart, links landing nowhere. */
-  const GEAR_M = { morgan76: [G('donut')], gwynn94: [G('ash')], ruth27: [G('cork')] };
-  const GOOD = ['morgan76', 'gwynn94', 'ichiro04', 'ruth27', 'ozzie87', 'mays65', 'williams41', 'bench72', 'gehrig27'].map(H);
-  const BAD = ['ruth27', 'mays65', 'bench72', 'gwynn94', 'ichiro04', 'ozzie87', 'morgan76', 'williams41', 'gehrig27'].map(H);
-  const g = winRate(GOOD, GEAR_M, P('maddux95'), 4, 4000, 42).win;
-  const b = winRate(BAD, GEAR_M, P('maddux95'), 4, 4000, 42).win;
-  check('sequence lever ≥ 5pp on mid board', g - b >= 0.05, `good ${(g * 100).toFixed(1)}% vs bad ${(b * 100).toFixed(1)}%`);
+  /* same three bats, only the order changes — the WORN link lands on Ruth (flips him
+     over the fresh wall) or is wasted on Schmidt (who stays under it either way). */
+  const SEQ_GOOD = [H('morgan76'), H('ruth27'), H('schmidt80'), null, null, null, null, null, null];
+  const SEQ_BAD = [H('morgan76'), H('schmidt80'), H('ruth27'), null, null, null, null, null, null];
+  const g = night(SEQ_GOOD, {}, 'koufax65');
+  const b = night(SEQ_BAD, {}, 'koufax65');
+  check('sequence is the lever — same bats, different night', g.runs > b.runs && g.broke && !b.broke,
+    `good order ${g.runs} runs (${g.finalState}) vs bad order ${b.runs} (${b.finalState})`);
 }
 
 if (failed) {

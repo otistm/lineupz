@@ -1,37 +1,34 @@
 /* LINEUP — pure resolution. No DOM. Node + browser.
 
-   The player strategizes with sequence, abilities, links, and pitcher gimmicks.
-   HIT / POW / stuff / stamina still resolve under the hood so nights feel varied,
-   but that math is not meant to be the player's surface. */
+   Nothing rolls. Every plate appearance is exact:
+   the bat's HIT beats the PITCH or it doesn't, and STAM DMG is the damage.
+   All the variety in a run comes from what the draft and sponsors offer —
+   never from the outcome of a strategic choice the player already made. */
 
-/* ---------- the one rule ---------- */
-export const CONTACT_BASE = 0.35; // even HIT vs STUFF reaches base this often
-export const CONTACT_STEP = 0.05; // per point of difference
-export const CONTACT_MIN = 0.05, CONTACT_MAX = 0.85;
-
-const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-
-export function contactChance(hit, stuff) {
-  return clamp(CONTACT_BASE + (hit - stuff) * CONTACT_STEP, CONTACT_MIN, CONTACT_MAX);
+/* ---------- the one rule: beat the pitch ---------- */
+/** Exact contest — the bat is on iff its HIT is strictly over the pitch. */
+export function beatsWall(hit, pitch) {
+  return hit > pitch;
 }
 
-/* ---------- hit quality: how well he got it decides damage and distance ----------
-   One roll around POW, so a bigger bat is both a bigger hit and a bigger dent.
-   Extra bases have to be earned by stacking POW, not handed out. */
-export const SWING_LOW = 0.6, SWING_HIGH = 1.5; // POW × this range
-export const DOUBLE_AT = 9.5;
-export const HOMER_AT = 13;
+/* ---------- hit distance: exact STAM DMG thresholds ----------
+   The damage a hit deals is exactly the bat's STAM DMG (POW).
+   Distance is read off that same number — extra bases are earned by stacking it. */
+export const DOUBLE_AT = 8;  // STAM DMG at or over this: a double
+export const HOMER_AT = 12;  // STAM DMG at or over this: gone
 
-/* ---------- archetypes: one ability each ---------- */
+/* ---------- archetypes: one ability each ----------
+   role = short card line in HIT / STAM DMG language.
+   ability = fuller hover text. Never talk about "he". */
 export const ARCH_INFO = {
-  SPARK:   { label: 'Spark',   role: 'Stretches singles · takes the extra base',
-    ability: 'Stretches singles into doubles, and takes the extra base ahead of the next bat.' },
-  GRINDER: { label: 'Grinder', role: 'Even his outs cost stamina',
-    ability: 'Long at-bats — even when he makes an out the pitcher pays stamina.' },
-  SLUGGER: { label: 'Slugger', role: 'Feeds once he is Gassed',
-    ability: 'Feeds on fatigue: hits harder once the pitcher is Gassed or worse.' },
-  RALLY:   { label: 'Rally',   role: 'Heats up with runners on',
-    ability: 'Gets hotter for every runner already on base.' },
+  SPARK:   { label: 'Spark',   role: 'Takes the extra base',
+    ability: 'Always takes the extra base on the paths. Once the pitcher is past Fresh, every single stretches into a double.' },
+  GRINDER: { label: 'Grinder', role: 'Outs still deal STAM DMG',
+    ability: 'Even an out deals STAM DMG to the pitcher (unless the pitcher ignores outs).' },
+  SLUGGER: { label: 'Slugger', role: '+3 STAM DMG once pitcher is Gassed',
+    ability: '+3 STAM DMG once the pitcher is Gassed or Broken.' },
+  RALLY:   { label: 'Rally',   role: '+1 HIT & STAM DMG per runner on',
+    ability: '+1 HIT and +1 STAM DMG for each runner already on base.' },
 };
 export const OUT_DAMAGE = { GRINDER: 2 };
 
@@ -52,7 +49,7 @@ export function stateOf(stamina, pool) {
   return 'BROKEN';
 }
 
-/* ---------- familiarity: a bat he has already seen is easier to handle ---------- */
+/* ---------- familiarity: a bat the pitcher has already seen is easier to handle ---------- */
 export const LOOKS = [
   { stuff: 0, label: 'first look' },
   { stuff: 1, label: 'second look' },
@@ -61,7 +58,7 @@ export const LOOKS = [
 ];
 export const lookAt = (seen) => LOOKS[Math.min(seen, LOOKS.length - 1)];
 
-/** Quiet contact wall for the resolver — not a player-facing number. */
+/** The pitch a bat has to beat — shown on the stamina bar as the red PITCH badge. */
 export function stuffAgainst(pitcher, state, seen = 0) {
   const fade = STATE_INFO[state].stuff * (pitcher.stubborn || 1);
   const edge = pitcher.freshEdge && state === 'FRESH' ? pitcher.freshEdge : 0;
@@ -78,9 +75,9 @@ export function battingOrder(lineup) {
 
 /* ---------- where a bat sits matters on its own ---------- */
 export const ZONES = [
-  { key: 'TOP',    label: 'Top of the order',    gives: 'gets on base',           HIT: 1, POW: 0, OUT: 0 },
-  { key: 'HEART',  label: 'Heart of the order',  gives: 'drives them in',         HIT: 0, POW: 2, OUT: 0 },
-  { key: 'BOTTOM', label: 'Bottom of the order', gives: 'outs still cost him',    HIT: 0, POW: 0, OUT: 1 },
+  { key: 'TOP',    label: 'Top of the order',    gives: '+1 HIT',                 HIT: 1, POW: 0, OUT: 0 },
+  { key: 'HEART',  label: 'Heart of the order',  gives: '+2 STAM DMG',            HIT: 0, POW: 2, OUT: 0 },
+  { key: 'BOTTOM', label: 'Bottom of the order', gives: 'outs +1 STAM DMG',       HIT: 0, POW: 0, OUT: 1 },
 ];
 export const zoneOf = (slot) => ZONES[Math.floor(slot / 3)];
 
@@ -88,7 +85,7 @@ export const zoneOf = (slot) => ZONES[Math.floor(slot / 3)];
 export const LINK_TYPES = {
   WORN:      { label: 'Worn down', gives: 'softens the next bat',              short: 'softens next', HIT: 2 },
   TABLESET:  { label: 'Table set', gives: 'sets the table for the slugger',    short: 'sets table', HIT: 3 },
-  ATTRITION: { label: 'Attrition', gives: 'both grinders wear him harder',     short: 'wear harder', OUT: 1, both: true },
+  ATTRITION: { label: 'Attrition', gives: 'both grinders wear the pitcher harder', short: 'wear harder', OUT: 1, both: true },
   IGNITE:    { label: 'Ignition',  gives: 'lights the rally man',              short: 'lights rally', POW: 2 },
 };
 
@@ -141,43 +138,43 @@ export function modifiersFor(e, state, ctx) {
   const mods = [];
   const on = Math.min(3, ctx.runners || 0);
   if (e.arch === 'RALLY' && on > 0) {
-    mods.push({ key: 'RALLY', label: 'Rally man', detail: `${on} on base`, HIT: on, POW: on });
+    mods.push({ key: 'RALLY', label: `+${on} HIT & STAM DMG`, detail: `${on} on base`, HIT: on, POW: on });
   }
   if (e.arch === 'SLUGGER' && (state === 'GASSED' || state === 'BROKEN')) {
-    mods.push({ key: 'SLUGGER', label: 'Feeds on fatigue', detail: `he is ${STATE_INFO[state].label}`, HIT: 0, POW: 3 });
+    mods.push({ key: 'SLUGGER', label: '+3 STAM DMG', detail: `pitcher is ${STATE_INFO[state].label}`, HIT: 0, POW: 3 });
   }
   return mods;
 }
 export const sumMods = (mods, key) => mods.reduce((a, m) => a + (m[key] || 0), 0);
 
-/* ---------- one plate appearance ---------- */
-export function resolvePA(e, stuff, ctx, rng) {
-  const mods = ctx.mods || modifiersFor(e, ctx.state || 'FRESH', ctx);
+/* ---------- one plate appearance — exact, no rolls ---------- */
+export function resolvePA(e, stuff, ctx, _rng) {
+  const state = ctx.state || 'FRESH';
+  const mods = ctx.mods || modifiersFor(e, state, ctx);
   const hit = e.HIT + sumMods(mods, 'HIT');
   const pow = e.POW + sumMods(mods, 'POW');
-  const chance = contactChance(hit, stuff);
 
-  if (rng() >= chance) {
-    return { type: 'OUT', reached: false, bases: 0, damage: ctx.noOutDamage ? 0 : e.OUT || 0, chance, hit, pow };
+  if (!beatsWall(hit, stuff)) {
+    return { type: 'OUT', reached: false, bases: 0, damage: ctx.noOutDamage ? 0 : e.OUT || 0, hit, pow, wall: stuff };
   }
 
-  const swing = pow * (SWING_LOW + rng() * (SWING_HIGH - SWING_LOW));
   let type = '1B', bases = 1, stretch = false;
-  if (swing >= HOMER_AT) { type = 'HR'; bases = 4; }
-  else if (swing >= DOUBLE_AT) { type = '2B'; bases = 2; }
-  else if (e.arch === 'SPARK' && rng() < 0.32) { type = '2B'; bases = 2; stretch = true; }
-  return { type, reached: true, bases, stretch, damage: Math.max(1, Math.round(swing)), chance, hit, pow };
+  if (pow >= HOMER_AT) { type = 'HR'; bases = 4; }
+  else if (pow >= DOUBLE_AT) { type = '2B'; bases = 2; }
+  // Spark's legs are an ability, not a roll: once the pitcher is tiring he stretches every single.
+  else if (e.arch === 'SPARK' && state !== 'FRESH') { type = '2B'; bases = 2; stretch = true; }
+  return { type, reached: true, bases, stretch, damage: pow, hit, pow, wall: stuff };
 }
 
 /* bases hold {arch} or null. */
-export function advanceRunners(bases, r, batter, rng) {
+export function advanceRunners(bases, r, batter, _rng) {
   let runs = 0;
   const nb = [null, null, null];
   const n = r.bases;
   for (let i = 2; i >= 0; i--) {
     if (!bases[i]) continue;
-    let mv = n;
-    if (n === 1 && bases[i].arch === 'SPARK' && rng() < 0.35) mv = 2;
+    // A spark on the bases always takes the extra base on a single — exact, every time.
+    const mv = n === 1 && bases[i].arch === 'SPARK' ? 2 : n;
     const to = i + mv;
     if (to >= 3) runs++;
     else nb[to] = bases[i];

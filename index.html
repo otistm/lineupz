@@ -21,7 +21,7 @@
     <div class="rules-body" id="rules-body">
       <div class="rule"><span class="num">1</span><span class="txt"><b>Draft, then sponsor.</b> Drag batters from the draft into your order (one card per career lineage). Pick <b>one of three sponsors</b> for gear. Then PLAY BALL.</span></div>
       <div class="rule"><span class="num">2</span><span class="txt"><b>Career cards.</b> Same player can show up as Rookie → Topps → All-Star → World Series. Buying a higher set <b>upgrades</b> the card you already own. Neighbours link — the glowing ropes feed the next bat.</span></div>
-      <div class="rule"><span class="num">3</span><span class="txt"><b>Empty his stamina.</b> Fresh → Laboring → Gassed → BROKEN. Each arm has a <b>gimmick</b>. Empty seats are skipped, never outs — but a short order means he keeps seeing the same bats.</span></div>
+      <div class="rule"><span class="num">3</span><span class="txt"><b>Empty the pitcher's stamina.</b> Fresh → Laboring → Gassed → BROKEN. Each pitcher has a <b>gimmick</b>. Empty seats are skipped, never outs — but a short order means the pitcher keeps seeing the same bats.</span></div>
       <div class="rule"><span class="num">4</span><span class="txt">Win or lose, you return to the draft, then a new sponsor trio, then the dugout. Fail a night and lose a <b>life</b>. Zero lives ends the run.</span></div>
       <button type="button" class="rules-gotit" id="rules-gotit">Got it</button>
     </div>
@@ -47,7 +47,7 @@
         <div class="opp-name" id="opp-name">—</div>
         <div class="stam">
           <div class="stam-head">
-            <span class="stam-lbl">His stamina <b id="stam-num">—</b></span>
+            <span class="stam-lbl">Pitcher's stamina <b id="stam-num">—</b></span>
             <span class="stam-state" id="stam-state">FRESH</span>
           </div>
           <div class="stam-bar" id="stam-bar">
@@ -55,12 +55,13 @@
             <s class="zone" style="left:65%"></s>
             <s class="zone" style="left:38%"></s>
             <s class="zone" style="left:12%"></s>
+            <b class="wall-badge" id="wall-badge" title="The pitch — a bat gets on base when its HIT beats this number. Empty the pitcher's stamina and the pitch falls."><i>Pitch</i><span id="wall-num">—</span></b>
           </div>
           <div class="stam-note" id="stam-note">—</div>
         </div>
       </div>
       <div class="target-box">
-        <div class="target-lbl">To beat him, score</div>
+        <div class="target-lbl">To beat the pitcher, score</div>
         <div class="target-num" id="target-num">—</div>
         <div class="target-note">runs in three innings</div>
       </div>
@@ -155,6 +156,13 @@
       <div class="outs" id="outs"><span class="out-pip"></span><span class="out-pip"></span><span class="out-pip"></span></div>
       <div class="sb-lbl" style="margin-top:16px">Inning</div>
       <div class="inn-strip" id="innings"><span class="inn-pip"></span><span class="inn-pip"></span><span class="inn-pip"></span></div>
+    </div>
+
+    <!-- the duel at the mound: HIT vs PITCH, exact numbers, bigger one wins -->
+    <div class="duel" id="duel" aria-hidden="true">
+      <span class="duel-side bat"><i>HIT</i><b id="duel-hit">—</b></span>
+      <span class="duel-vs">vs</span>
+      <span class="duel-side arm"><i>PITCH</i><b id="duel-wall">—</b></span>
     </div>
   </div>
 

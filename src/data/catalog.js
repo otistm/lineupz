@@ -94,7 +94,7 @@ export const HITTERS = [
   { id: 'jeter00-ws',  lineage: 'jeter',  set: 'WORLD_SERIES', n: 'Derek Jeter',      y: 2000, team: 'Yankees',   arch: 'SPARK',   HIT: 8, POW: 4, cap: 2, cost: 12 },
 ];
 
-/* Gear — sold only by sponsors. OUT = his outs cost that much stamina. */
+/* Gear — sold only by sponsors. OUT = the bat's outs cost the pitcher that much stamina. */
 export const GEAR = [
   { id: 'ash',      n: 'Ash Bat',        w: 1, cost: 2, mods: { HIT: 1 }, tags: ['hit'] },
   { id: 'cork',     n: 'Corked Bat',     w: 1, cost: 3, mods: { POW: 2 }, tags: ['pow'] },
@@ -112,7 +112,7 @@ export const GEAR = [
 /** Three sponsor identities. Each visit rolls all three; user picks one. */
 export const SPONSORS = [
   { id: 'batco',  n: 'Bat Co.',     blurb: 'Contact wood and soft hands — get on base.', tags: ['hit'] },
-  { id: 'pinetar', n: 'Pine & Tar', blurb: 'Long at-bats. Make even outs cost him.', tags: ['wear'] },
+  { id: 'pinetar', n: 'Pine & Tar', blurb: 'Long at-bats. Make even outs cost the pitcher.', tags: ['wear'] },
   { id: 'cage',   n: 'Power Cage',  blurb: 'Barrel work — drive the ball and empty the tank.', tags: ['pow'] },
 ];
 
@@ -136,23 +136,23 @@ export const PITCHERS = [
     note: 'Soft opener — learn the draft, then the sequence.',
     tip: 'Seat what you can afford, light a link, and score one.' },
   { id: 'maddux95', n: 'Greg Maddux',    y: 1995, stuff: 6, pool: 42, efficient: true,
-    note: 'Outs never cost him stamina. You have to put the ball in play.',
-    tip: 'Lean on Sparks and Sluggers — Grinders who only wear him with outs do nothing.' },
+    note: 'Outs never cost this pitcher stamina. You have to put the ball in play.',
+    tip: 'Lean on Sparks and Sluggers — Grinders who only wear the pitcher with outs do nothing.' },
   { id: 'koufax65', n: 'Sandy Koufax',   y: 1965, stuff: 5, pool: 46, freshEdge: 2,
-    note: 'Untouchable while Fresh. Crack that first wall or you never get going.',
+    note: 'Untouchable while Fresh. Beat that first pitch or you never get going.',
     tip: 'Grinders and early wear — empty the tank before the middle of the order.' },
   { id: 'gibson68', n: 'Bob Gibson',     y: 1968, stuff: 6, pool: 42, recover: 7,
-    note: 'Catches his breath between innings. Short innings let him reset.',
+    note: 'This pitcher catches his breath between innings. Short innings let him reset.',
     tip: 'Build long rallies — Sparks into Rally men, keep the inning alive.' },
   { id: 'pedro00',  n: 'Pedro Martínez', y: 2000, stuff: 7, pool: 58, stubborn: 0.5,
-    note: 'Deepest tank, and he fades slowest. Every link has to work.',
-    tip: 'Fill the order, sequence your links, and stack Sluggers for when he cracks.' },
+    note: 'Deepest tank, and this pitcher fades slowest. Every link has to work.',
+    tip: 'Fill the order, sequence your links, and stack Sluggers for when the pitcher cracks.' },
 ];
 
 export const LADDER = [
   { pitcher: 'longman',  target: 1, name: 'Opening Night', blurb: 'Draft your bats, pick a sponsor, then build the order.' },
-  { pitcher: 'maddux95', target: 2, name: 'The Surgeon',   blurb: 'Outs are free for him — put the ball in play.' },
-  { pitcher: 'koufax65', target: 2, name: 'The Fastball',  blurb: 'A wall while Fresh — wear him down early.' },
+  { pitcher: 'maddux95', target: 2, name: 'The Surgeon',   blurb: 'Outs are free for this pitcher — put the ball in play.' },
+  { pitcher: 'koufax65', target: 2, name: 'The Fastball',  blurb: 'A brutal pitch while Fresh — wear the pitcher down early.' },
   { pitcher: 'gibson68', target: 2, name: 'The Bulldog',   blurb: 'Recovers between innings — keep rallies going.' },
   { pitcher: 'pedro00',  target: 3, name: 'The Wall',      blurb: 'Deep tank, slow fade — every link has to fire.' },
 ];

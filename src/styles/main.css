@@ -88,7 +88,7 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
 }
 @keyframes brokepulse{50%{opacity:.55}}
 .stam-bar{position:relative;height:20px;border-radius:6px;background:rgba(242,237,224,.1);
-  border:2px solid rgba(242,237,224,.22);overflow:hidden}
+  border:2px solid rgba(242,237,224,.22)}
 .stam-fill{position:absolute;inset:0;right:auto;width:100%;border-radius:3px;
   background:linear-gradient(90deg,#3E8E63,var(--good));
   transition:width .45s cubic-bezier(.2,1,.4,1), background .4s}
@@ -98,13 +98,55 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
 .stam-bar .zone{position:absolute;top:-2px;bottom:-2px;width:2px;background:rgba(242,237,224,.35)}
 .stam-bar.hitflash{animation:hitflash .3s ease-out}
 @keyframes hitflash{30%{box-shadow:0 0 22px rgba(255,179,71,.75)}}
+/* the wall held — he shrugs it off with a green pulse, no harm done */
+.stam-bar.held{animation:barheld .55s ease-out}
+@keyframes barheld{35%{box-shadow:0 0 24px rgba(94,216,154,.8);
+  filter:brightness(1.18) saturate(1.25)}}
+/* the PITCH badge: one labeled red number riding the fill edge — beat it with HIT */
+.wall-badge{position:absolute;top:50%;transform:translate(-50%,-50%);z-index:5;
+  display:flex;align-items:center;gap:5px;padding:3px 7px 4px;border-radius:6px;
+  color:#FFD9CF;background:linear-gradient(180deg,#A83726,#7A2418);border:2px solid #E8503A;
+  box-shadow:0 0 10px rgba(232,80,58,.5), 0 2px 6px rgba(0,0,0,.45);
+  transition:left .45s cubic-bezier(.2,1,.4,1);cursor:help}
+.wall-badge i{font-style:normal;font-size:8px;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:#FFB3A1}
+.wall-badge span{font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  font-size:1.05rem;line-height:1}
+.wall-badge.flash{animation:wallflash .55s ease}
+@keyframes wallflash{40%{filter:brightness(1.5);transform:translate(-50%,-50%) scale(1.22)}}
 .stam-note{font-size:9px;color:var(--chalk-dim);margin-top:5px;font-style:italic}
 .stam-note b{color:var(--chalk)}
 .drain-float{position:absolute;font-family:'Big Shoulders Display',sans-serif;font-weight:800;
   font-size:1.15rem;color:var(--bulb);text-shadow:0 0 12px rgba(255,179,71,.8);pointer-events:none;z-index:60;
   animation:drainup .9s ease-out both}
+.drain-float.pow{color:var(--bulb);text-shadow:0 0 18px rgba(255,179,71,.95);font-size:2rem}
+.drain-float.wear{color:#D4A07A;text-shadow:0 0 10px rgba(180,118,74,.75)}
 .drain-float.free{color:var(--chalk-dim);text-shadow:none;font-size:1rem;opacity:.85}
 @keyframes drainup{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-30px)}}
+/* Bits of the tank leaving the bat — POW amber vs OUT clay. */
+.stam-bit{position:fixed;width:9px;height:9px;border-radius:2px;pointer-events:none;z-index:70;
+  opacity:1;transform:translate(-50%,-50%);box-shadow:0 0 10px currentColor}
+.stam-bit.pow{border-radius:50%;box-shadow:0 0 12px rgba(255,179,71,.85)}
+.stam-bit.wear{width:8px;height:6px;border-radius:1px;transform:translate(-50%,-50%) rotate(18deg);
+  box-shadow:0 0 8px rgba(140,88,54,.6)}
+#stam-bar.wearflash{animation:wearflash .45s ease-out}
+@keyframes wearflash{0%,100%{filter:none}40%{filter:brightness(1.15) saturate(1.2);
+  box-shadow:0 0 18px rgba(180,118,74,.55)}}
+/* --- flying numbers: a stat leaves its cell and goes to work --- */
+.stat-chip{position:fixed;z-index:80;pointer-events:none;transform:translate(-50%,-50%);
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.05rem;line-height:1;
+  padding:3px 8px;border-radius:5px;border:2px solid}
+.stat-chip.hit{color:#CFE7FF;background:#1F4F78;border-color:#78B7FF;
+  box-shadow:0 0 14px rgba(120,183,255,.7)}
+.stat-chip.arm{color:#FFD9CF;background:#7A2418;border-color:#E8503A;
+  box-shadow:0 0 14px rgba(232,80,58,.7)}
+.dmg-chip{position:fixed;z-index:80;pointer-events:none;transform:translate(-50%,-50%);
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.5rem;line-height:1;
+  padding:3px 9px;border-radius:6px}
+.dmg-chip.pow{color:#FFF0CE;background:rgba(60,36,8,.88);border:2px solid var(--bulb);
+  text-shadow:0 0 12px rgba(255,179,71,.95);box-shadow:0 0 18px rgba(255,179,71,.55)}
+.dmg-chip.wear{color:#E8CBB4;background:rgba(46,28,16,.88);border:2px solid #B4764A;
+  text-shadow:0 0 10px rgba(180,118,74,.8);box-shadow:0 0 14px rgba(140,88,54,.5)}
 .target-box{
   border:2px dashed var(--bulb);border-radius:10px;padding:12px 14px;text-align:center;
   background:rgba(255,179,71,.09);
@@ -118,9 +160,33 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
    No panel — the diamond sits open on the turf. Bottom margin is the lane
    the at-bat's boost labels float up into. */
 .scoreboard{
+  position:relative;
   display:grid;grid-template-columns:minmax(120px,1fr) minmax(380px,640px) minmax(120px,1fr);
   gap:26px;align-items:center;max-width:1280px;margin:0 auto 44px;
 }
+/* --- the duel at the mound: HIT vs WALL, exact numbers, bigger one wins --- */
+.duel{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) scale(.8);z-index:12;
+  display:flex;align-items:center;gap:10px;opacity:0;pointer-events:none;
+  transition:opacity .22s, transform .22s cubic-bezier(.2,1.4,.4,1)}
+.duel.live{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.duel-side{display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:7px 12px 8px;border-radius:9px;border:2.5px solid;background:rgba(8,16,11,.92);
+  box-shadow:0 6px 20px rgba(0,0,0,.55);transition:transform .18s, filter .25s, box-shadow .25s}
+.duel-side i{font-style:normal;font-size:8px;letter-spacing:.22em;text-transform:uppercase;font-weight:600}
+.duel-side b{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:2.1rem;line-height:.9}
+.duel-side.bat{border-color:#78B7FF;color:#CFE7FF}
+.duel-side.bat b{color:#9FCBFF;text-shadow:0 0 14px rgba(120,183,255,.65)}
+.duel-side.arm{border-color:#E8503A;color:#FFD9CF}
+.duel-side.arm b{color:#FF8A72;text-shadow:0 0 14px rgba(232,80,58,.65)}
+.duel-vs{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:.95rem;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim)}
+/* the winner pops, the loser goes flat */
+.duel.bat-wins .duel-side.bat{transform:scale(1.16);
+  box-shadow:0 0 28px rgba(120,183,255,.75), 0 6px 20px rgba(0,0,0,.55)}
+.duel.bat-wins .duel-side.arm{filter:grayscale(.7) brightness(.6)}
+.duel.arm-wins .duel-side.arm{transform:scale(1.16);
+  box-shadow:0 0 28px rgba(232,80,58,.75), 0 6px 20px rgba(0,0,0,.55)}
+.duel.arm-wins .duel-side.bat{filter:grayscale(.7) brightness(.6)}
 .scoreboard.hidden{display:none}
 .scoreboard.live{animation:sbtakestage .42s cubic-bezier(.2,1.5,.4,1) both}
 @keyframes sbtakestage{from{opacity:0;transform:translateY(-16px) scale(.985)}}
@@ -410,20 +476,46 @@ body.dragging-shop[data-phase="sponsors"] #gear-tray{
   text-transform:uppercase;cursor:grab;overflow-wrap:anywhere;touch-action:none;user-select:none;
   -webkit-user-select:none}
 .pmeta{font-size:8px;letter-spacing:.07em;color:var(--ink-soft);margin-top:3px}
-.prole{font-size:8px;line-height:1.45;color:var(--ink-soft);font-style:italic;margin-top:6px;
-  padding-top:6px;border-top:1.5px solid rgba(23,20,15,.15)}
+.prole{font-size:8px;line-height:1.35;color:var(--ink-soft);margin-top:6px;
+  text-align:center}
 
-/* --- two big numbers: identity only, no bars and no duel formula --- */
-.bignums{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+/* --- two jobs, two colors: HIT (cool / reach) vs STAM DMG (warm / empty the tank) --- */
+.bignums{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
 .bignum{display:flex;flex-direction:column;align-items:center;padding:6px 4px 5px;
   border-radius:6px;background:rgba(23,20,15,.07);border:1.5px solid rgba(23,20,15,.1)}
-.bignum .bn-lbl{font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.bignum .bn-lbl{font-size:7px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
 .bignum .bn-v{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.85rem;line-height:1;
   letter-spacing:.02em;margin-top:2px}
 .bignum .bn-v.up{color:#1F6E43} .bignum .bn-v.dn{color:var(--out)}
-.bignum.k-HIT .bn-v{color:#2E6E9E}
+.bignum.k-HIT{
+  background:rgba(46,110,158,.12);border-color:rgba(46,110,158,.32);
+}
+.bignum.k-HIT .bn-lbl{color:#2E6E9E}
+.bignum.k-HIT .bn-v{color:#1F4F78}
+.bignum.k-POW{
+  background:rgba(255,179,71,.16);border-color:rgba(201,138,27,.4);
+}
+.bignum.k-POW .bn-lbl{color:#A86F12}
 .bignum.k-POW .bn-v{color:#C98A1B}
 .bignum.k-HIT .bn-v.up,.bignum.k-POW .bn-v.up{color:#1F6E43}
+/* live cell beats: the stat that's working pops; the one that lost dims */
+.bignum.tick{animation:celltick .4s cubic-bezier(.2,1.5,.35,1)}
+@keyframes celltick{40%{transform:scale(1.16)}}
+.bignum.k-HIT.firing{animation:cellfireB .55s ease}
+@keyframes cellfireB{30%{transform:scale(1.2);box-shadow:0 0 16px rgba(78,160,220,.9);
+  border-color:#78B7FF}}
+.bignum.k-POW.firing{animation:cellfireA .55s ease}
+@keyframes cellfireA{30%{transform:scale(1.2);box-shadow:0 0 16px rgba(255,179,71,.9);
+  border-color:var(--bulb)}}
+.bignum.lost{animation:celllost .5s ease}
+@keyframes celllost{35%{filter:grayscale(.85) brightness(.65);transform:scale(.93)}}
+/* exact draft read: does this card's HIT clear tonight's pitch */
+.vs-arm{margin-top:6px;cursor:help}
+.vsw{display:block;text-align:center;font-size:7.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:5px 4px 6px;border-radius:5px;border:1.5px solid}
+.vsw.ok{color:#1F6E43;background:rgba(94,216,154,.16);border-color:rgba(31,110,67,.4)}
+.vsw.mid{color:#A86F12;background:rgba(255,179,71,.14);border-color:rgba(201,138,27,.4)}
+.vsw.no{color:#A8352A;background:rgba(232,80,58,.12);border-color:rgba(232,80,58,.35)}
 .zline{font-size:7px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);
   margin-top:7px;opacity:.75;cursor:help}
 
