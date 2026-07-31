@@ -86,6 +86,68 @@ const night = (lineup, gearMap, pid) => simNight(lineup, gearMap, P(pid), rng0);
     stuffAgainst(p, 'GASSED', 0) - p.stuff > stuffAgainst(k, 'GASSED', 0) - k.stuff);
 }
 
+/* ---------- pitcher counters: the Book + unique gimmicks ---------- */
+{
+  const plain = { stuff: 6, pool: 40 };
+  const booked = { stuff: 6, pool: 40, lookMul: 2 };
+  const base = stuffAgainst(plain, 'FRESH', 0);
+  check('the Book doubles second-look STUFF',
+    stuffAgainst(booked, 'FRESH', 1) - base === lookAt(1).stuff * 2
+    && stuffAgainst(plain, 'FRESH', 1) - base === lookAt(1).stuff);
+
+  const spark = { HIT: 9, POW: 2, OUT: 0, arch: 'SPARK' };
+  const stretch = resolvePA(spark, 4, { runners: 0, state: 'LABORING' }, rng0);
+  const noStretch = resolvePA(spark, 4, { runners: 0, state: 'LABORING', noStretch: true }, rng0);
+  check('Maddux noStretch keeps Sparks as singles past Fresh',
+    stretch.type === '2B' && stretch.stretch && noStretch.type === '1B' && !noStretch.stretch);
+  const legsFree = advanceRunners([{ arch: 'SPARK' }, null, null], { bases: 1, type: '1B', reached: true }, { arch: 'RALLY' }, rng0);
+  const legsHeld = advanceRunners([{ arch: 'SPARK' }, null, null], { bases: 1, type: '1B', reached: true }, { arch: 'RALLY' }, rng0, { noStretch: true });
+  check('Maddux noStretch holds Sparks on the bases',
+    legsFree.bases[2]?.arch === 'SPARK' && legsHeld.bases[1]?.arch === 'SPARK');
+
+  const koufax = P('koufax65');
+  check('Koufax TOP Fresh wall adds topTax',
+    stuffAgainst(koufax, 'FRESH', 0, [], { zone: 'TOP' }) === koufax.stuff + koufax.freshEdge + koufax.topTax);
+  check('Koufax topTax only while Fresh on TOP',
+    stuffAgainst(koufax, 'FRESH', 0, [], { zone: 'HEART' }) === koufax.stuff + koufax.freshEdge
+    && stuffAgainst(koufax, 'GASSED', 0, [], { zone: 'TOP' }) === stuffAgainst(koufax, 'GASSED', 0));
+
+  const gibson = P('gibson68');
+  const g0 = stuffAgainst(gibson, 'FRESH', 0, [], { runners: 0 });
+  const g1 = stuffAgainst(gibson, 'FRESH', 0, [], { runners: 1 });
+  check('Gibson traffic raises the wall with runners on', g1 === g0 + gibson.traffic);
+
+  const pedro = P('pedro00');
+  check('Pedro linkTax raises the wall on linked bats',
+    stuffAgainst(pedro, 'FRESH', 0, [], { linked: true })
+      === stuffAgainst(pedro, 'FRESH', 0, [], { linked: false }) + pedro.linkTax);
+  const chain = [H('morgan76'), H('ruth27'), null, null, null, null, null, null, null];
+  const { eff: chainEff } = boardSetup(chain, {});
+  check('boardSetup marks link receivers', chainEff[1].linked === true && !chainEff[0].linked);
+
+  const closer = { HIT: 4, POW: 5, OUT: 0, arch: 'CLOSER' };
+  check('Unit mutes Closers while Fresh',
+    modifiersFor(closer, 'FRESH', { outs: 2, muteCloser: true }).length === 0
+    && modifiersFor(closer, 'LABORING', { outs: 2, muteCloser: true })[0].HIT === 2);
+
+  const patient = { HIT: 5, POW: 2, OUT: 1, arch: 'PATIENT' };
+  check('Ryan denyFirstLook blocks Patient first-look HIT',
+    modifiersFor(patient, 'FRESH', { seen: 0, denyFirstLook: true }).length === 0);
+  const scout = CHARMS.find((c) => c.id === 'scout');
+  const ryan = P('ryan73');
+  check('Ryan denyFirstLook ignores Scouting Report',
+    stuffAgainst(ryan, 'FRESH', 0, [scout]) === stuffAgainst(ryan, 'FRESH', 0, []));
+  check('Ryan carries the deepest Book', ryan.lookMul === 2 && ryan.denyFirstLook);
+
+  const soft = resolvePA({ HIT: 7, POW: 4, OUT: 2, arch: 'GRINDER' }, 6,
+    { runners: 0, state: 'FRESH', softContact: true, outDamageScale: 0.5 }, rng0);
+  const hard = resolvePA({ HIT: 8, POW: 4, OUT: 2, arch: 'GRINDER' }, 6,
+    { runners: 0, state: 'FRESH', softContact: true, outDamageScale: 0.5 }, rng0);
+  check('Rivera softContact turns wall+1 into an out',
+    !soft.reached && soft.softContact && soft.damage === 1);
+  check('Rivera softContact still allows wall+2 hits', hard.reached && hard.type === '1B');
+}
+
 /* ---------- damage: STAM DMG is exactly the number on the card ---------- */
 {
   const pa = (pow) => resolvePA({ HIT: 20, POW: pow, OUT: 0, arch: 'GRINDER' }, 0, { runners: 0, state: 'FRESH' }, rng0);
@@ -254,10 +316,10 @@ const FUNDED_GEAR = {
   check('underfunded board is blanked by Pedro', weak.runs < LADDER[4].target, `${weak.runs} runs`);
 }
 {
-  /* same three bats, only the order changes — the WORN link lands on Ruth (flips him
-     over the fresh wall) or is wasted on Schmidt (who stays under it either way). */
-  const SEQ_GOOD = [H('morgan76'), H('ruth27'), H('schmidt80'), null, null, null, null, null, null];
-  const SEQ_BAD = [H('morgan76'), H('schmidt80'), H('ruth27'), null, null, null, null, null, null];
+  /* same three bats in the heart (away from Koufax's TOP tax), only the order changes —
+     the WORN link lands on Ruth (flips him over the fresh wall) or is wasted on Schmidt. */
+  const SEQ_GOOD = [null, null, null, H('morgan76'), H('ruth27'), H('schmidt80'), null, null, null];
+  const SEQ_BAD = [null, null, null, H('morgan76'), H('schmidt80'), H('ruth27'), null, null, null];
   const g = night(SEQ_GOOD, {}, 'koufax65');
   const b = night(SEQ_BAD, {}, 'koufax65');
   check('sequence is the lever — same bats, different night', g.runs > b.runs && g.broke && !b.broke,
@@ -273,7 +335,9 @@ const FUNDED_GEAR = {
     && LADDER.every((r, i) => r.pitcher === UNLOCK_ORDER[i]));
   check('every unlock has a ladder def', UNLOCK_ORDER.every((id) => LADDER_DEFS[id]));
   check('new pitchers have gimmicks',
-    P('unit95')?.intimidate === 3 && P('ryan73')?.pool >= 70 && P('mo99')?.halfOuts === true);
+    P('unit95')?.intimidate === 3 && P('unit95')?.muteCloser
+    && P('ryan73')?.pool >= 70 && P('ryan73')?.denyFirstLook
+    && P('mo99')?.halfOuts === true && P('mo99')?.softContact);
 
   const map = generateRunMap(3, 42);
   check('map has one act per ladder rung', map.acts.length === 3);

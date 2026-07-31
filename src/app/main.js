@@ -36,7 +36,7 @@ import {
   applyEventEffect, claimFreeBatter, removeOwnedCard,
 } from '../engine/events.js';
 import {
-  loadMeta, ladderForRun, nextUnlockTease, unlockAfterBeat, nextPitcherAfter,
+  loadMeta, ladderForRun, unlockAfterBeat, nextPitcherAfter,
 } from './meta.js';
 import { createLinkField, LINK_COLOR } from './linkfield.js';
 import { createField } from './field.js';
@@ -59,12 +59,18 @@ const RULES_KEY = 'lineup.hideRules';
  *  info: { pit, e, state, seen, look, mods, damage } */
 function tellFor(r, info) {
   const bits = [];
+  const pit = info.pit || {};
   if (!r.reached) {
-    if (info.pit.efficient) bits.push("outs don't cost the pitcher");
+    if (r.softContact) bits.push('cutter eats soft contact');
+    else if (pit.efficient) bits.push("outs don't cost the pitcher");
     else if (info.damage > 0) bits.push(`still costs the pitcher · −${info.damage}`);
     else if (info.state === 'FRESH') bits.push('the pitcher was Fresh');
     else bits.push('put away');
-    if (info.seen > 0) bits.push('the pitcher has seen this bat');
+    if (info.seen > 0 && (pit.lookMul || 1) > 1) bits.push('the Book');
+    else if (info.seen > 0) bits.push('the pitcher has seen this bat');
+    else if (pit.linkTax && info.e?.linked) bits.push('link tax');
+    else if (pit.topTax && info.state === 'FRESH' && info.e?.zone === 'TOP') bits.push('top of the order tax');
+    else if (pit.muteCloser && info.state === 'FRESH' && info.e?.arch === 'CLOSER') bits.push('Closer muted');
   } else {
     if (r.stretch) bits.push('stretches it');
     else if (info.mods?.some((m) => m.key === 'SLUGGER')) bits.push('+3 STAM DMG');
@@ -75,7 +81,9 @@ function tellFor(r, info) {
     else if (r.type === '2B') bits.push('hard contact');
     else if (r.type === '1B') bits.push('puts it in play');
     if (info.damage > 0) bits.push(`−${info.damage}`);
-    if (info.seen > 0 && bits.length < 2) bits.push(info.look.label);
+    if (info.seen > 0 && bits.length < 2) {
+      bits.push((pit.lookMul || 1) > 1 ? 'the Book' : info.look.label);
+    }
   }
   return bits.slice(0, 2).join(' · ');
 }
@@ -992,28 +1000,6 @@ function renderSponsors() {
   }).join('');
 }
 
-function renderTitle() {
-  const meta = loadMeta();
-  const arms = ladderForRun(meta);
-  const el = $('#title-ladder');
-  if (el) {
-    el.innerHTML = arms.map((r) => {
-      const p = PITCHERS.find((x) => x.id === r.pitcher);
-      return `<div class="title-arm">
-        <div class="ta-name">${r.name}</div>
-        <div class="ta-pit">${p?.n || r.pitcher} · ${r.target}+</div>
-      </div>`;
-    }).join('');
-  }
-  const tease = nextUnlockTease(meta);
-  const next = $('#title-next');
-  if (next) {
-    next.textContent = tease
-      ? `Next unlock — beat your last arm to face ${tease.name}: ${tease.pitcher}`
-      : 'Full ladder unlocked. Every arm is in play.';
-  }
-}
-
 function mixHex(a, b, t) {
   const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
   const ch = (s) => Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t);
@@ -1244,8 +1230,7 @@ function renderEventFollowup() {
 
 function renderMarket() {
   renderPhaseChrome();
-  if (S.phase === 'title') renderTitle();
-  else if (S.phase === 'map') renderMap();
+  if (S.phase === 'map') renderMap();
   else if (S.phase === 'event') renderEvent();
   else if (S.phase === 'draft') renderDraft();
   else if (S.phase === 'sponsors') renderSponsors();
@@ -2110,6 +2095,39 @@ function finishPointer(e) {
 document.addEventListener('pointerup', finishPointer);
 document.addEventListener('pointercancel', finishPointer);
 
+/* =================== foil tracking =================== */
+/* All-Star and World Series nameplates carry a highlight that sits where the
+   light would catch the card, so it follows the cursor across the whole card
+   rather than just the header strip. Writes are coalesced to one per frame. */
+const FOIL_SEL = '.pc.set-all-star, .pc.set-world-series';
+let foilHead = null;
+let foilPend = null;
+let foilRaf = 0;
+function paintFoil() {
+  foilRaf = 0;
+  const { head, x, y } = foilPend;
+  head.style.setProperty('--hx', `${x.toFixed(1)}%`);
+  head.style.setProperty('--hy', `${y.toFixed(1)}%`);
+}
+function clearFoil() {
+  if (!foilHead) return;
+  foilHead.style.removeProperty('--hx');
+  foilHead.style.removeProperty('--hy');
+  foilHead = null;
+}
+document.addEventListener('pointermove', (e) => {
+  if (drag || REDUCED) return;
+  const card = e.target.closest?.(FOIL_SEL);
+  const head = card?.querySelector(':scope > .pc-head') || null;
+  if (head !== foilHead) { clearFoil(); foilHead = head; }
+  if (!head) return;
+  const r = card.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  foilPend = { head, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 };
+  if (!foilRaf) foilRaf = requestAnimationFrame(paintFoil);
+}, { passive: true });
+document.addEventListener('pointerleave', clearFoil);
+
 /* =================== play =================== */
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -2427,15 +2445,23 @@ async function playRound() {
         const seen = looks[slot]++;
         const look = lookAt(seen);
         const stateBefore = stateOf(stamina, pit.pool);
-        const stuff = stuffAgainst(pit, stateBefore, seen, S.charms);
         const runners = bases.filter(Boolean).length;
+        const stuff = stuffAgainst(pit, stateBefore, seen, S.charms, {
+          zone: e.zone, linked: e.linked, runners,
+        });
         const mods = modifiersFor(e, stateBefore, {
           runners, outs, seen, charms: S.charms,
+          muteCloser: !!pit.muteCloser,
+          denyFirstLook: !!pit.denyFirstLook,
         });
         const ctx = {
           runners, state: stateBefore, mods, outs, seen, charms: S.charms,
           noOutDamage: pit.efficient,
           outDamageScale: pit.halfOuts ? 0.5 : undefined,
+          noStretch: !!pit.noStretch,
+          softContact: !!pit.softContact,
+          muteCloser: !!pit.muteCloser,
+          denyFirstLook: !!pit.denyFirstLook,
         };
 
         // Next batter is up: clear every prior stamp / duel so only this AB can leave a mark.
@@ -2526,7 +2552,7 @@ async function playRound() {
           card.addEventListener('animationend', () => card.classList.remove('whiffed'), { once: true });
         } else {
           const before = bases;
-          const a = advanceRunners(before, r, tok, rng);
+          const a = advanceRunners(before, r, tok, rng, { noStretch: !!pit.noStretch });
           bases = a.bases; scored = a.runs; runs += scored; totalRuns += scored;
           chain++;
           setRally(chain);
@@ -2704,7 +2730,7 @@ function finishRound(runs, rung, finalState, brokeInning) {
       <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>${brokeInning ? ` — and you <b>broke the pitcher</b> in inning ${brokeInning}` : ''}.
       Earned <span class="v-reward">+${pay}g</span> (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.${unlockLine}<br>
       Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Walk the next path.'}${rematchNote}</div>
-      <button class="act go" id="advance" style="flex:0 0 auto">NEXT ACT · MAP</button>`);
+      <button class="act go" id="advance" style="flex:0 0 auto">NEXT MAP</button>`);
     audio.win(); confetti();
     renderWallet(); updatePlayButton();
     return;
@@ -2922,6 +2948,20 @@ initRules();
 initSpeed();
 initTips();
 initHexMapEvents();
+
+/* Title bed: loop the reel; if it never loads, peel it off so title-bg.png shows. */
+{
+  const vid = $('#title-bg-video');
+  if (vid) {
+    const bail = () => { vid.remove(); };
+    vid.addEventListener('error', bail);
+    vid.querySelector('source')?.addEventListener('error', bail);
+    const kick = () => { vid.play?.().catch(() => {}); };
+    vid.addEventListener('loadeddata', kick);
+    kick();
+  }
+}
+
 renderAll();
 renderScorecard();
 theField()?.clear();

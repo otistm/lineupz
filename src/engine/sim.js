@@ -69,14 +69,22 @@ export function sumCharmEffect(charms, key) {
   return n;
 }
 
-/** The pitch a bat has to beat — shown on the stamina bar as the red PITCH badge. */
-export function stuffAgainst(pitcher, state, seen = 0, charms = []) {
+/** The pitch a bat has to beat — shown on the stamina bar as the red PITCH badge.
+ *  Optional ctx: { zone, linked, runners } for per-PA pattern taxes (topTax / linkTax / traffic).
+ *  denyFirstLook on the pitcher zeroes Scouting Report's first-look wall cut. */
+export function stuffAgainst(pitcher, state, seen = 0, charms = [], ctx = {}) {
   const fadeMul = pitcher.fadeHard && state !== 'FRESH' ? pitcher.fadeHard : 1;
   const fade = STATE_INFO[state].stuff * (pitcher.stubborn || 1) * fadeMul;
   const edge = pitcher.freshEdge && state === 'FRESH' ? pitcher.freshEdge : 0;
   const intimidate = pitcher.intimidate && state === 'FRESH' ? pitcher.intimidate : 0;
-  const charmDelta = seen === 0 ? sumCharmEffect(charms, 'firstLookStuff') : 0;
-  return Math.max(0, Math.round(pitcher.stuff + fade + edge + intimidate + lookAt(seen).stuff + charmDelta));
+  const book = lookAt(seen).stuff * (pitcher.lookMul ?? 1);
+  const charmDelta = (seen === 0 && !pitcher.denyFirstLook)
+    ? sumCharmEffect(charms, 'firstLookStuff') : 0;
+  let tax = 0;
+  if (pitcher.topTax && state === 'FRESH' && ctx.zone === 'TOP') tax += pitcher.topTax;
+  if (pitcher.linkTax && ctx.linked) tax += pitcher.linkTax;
+  if (pitcher.traffic && (ctx.runners || 0) >= 1) tax += pitcher.traffic;
+  return Math.max(0, Math.round(pitcher.stuff + fade + edge + intimidate + book + charmDelta + tax));
 }
 
 /* ---------- the order ---------- */
@@ -183,13 +191,15 @@ export function boardSetup(lineup, gearMap, charms = []) {
       eff[s].HIT += t.HIT || 0;
       eff[s].POW += t.POW || 0;
       eff[s].OUT += t.OUT || 0;
+      eff[s].linked = true;
     }
   }
   return { eff, links };
 }
 
 /* ---------- live modifiers, shared by the sim and the card readout ----------
-   ctx: { runners, state, outs, seen, charms }. Returned in the order they should be shown. */
+   ctx: { runners, state, outs, seen, charms, muteCloser, denyFirstLook }.
+   Returned in the order they should be shown. */
 export function modifiersFor(e, state, ctx) {
   const mods = [];
   const on = Math.min(3, ctx.runners || 0);
@@ -199,10 +209,10 @@ export function modifiersFor(e, state, ctx) {
   if (e.arch === 'SLUGGER' && (state === 'GASSED' || state === 'BROKEN')) {
     mods.push({ key: 'SLUGGER', label: '+3 STAM DMG', detail: `pitcher is ${STATE_INFO[state].label}`, HIT: 0, POW: 3 });
   }
-  if (e.arch === 'CLOSER' && (ctx.outs || 0) >= 2) {
+  if (e.arch === 'CLOSER' && (ctx.outs || 0) >= 2 && !(ctx.muteCloser && state === 'FRESH')) {
     mods.push({ key: 'CLOSER', label: '+2 HIT & STAM DMG', detail: '2 outs', HIT: 2, POW: 2 });
   }
-  if (e.arch === 'PATIENT' && (ctx.seen || 0) === 0) {
+  if (e.arch === 'PATIENT' && (ctx.seen || 0) === 0 && !ctx.denyFirstLook) {
     mods.push({ key: 'PATIENT', label: '+2 HIT', detail: 'first look', HIT: 2, POW: 0 });
   }
   const laborPow = sumCharmEffect(ctx.charms, 'laboringPow');
@@ -223,31 +233,41 @@ export function resolvePA(e, stuff, ctx, _rng) {
   const hit = e.HIT + sumMods(mods, 'HIT');
   const pow = e.POW + sumMods(mods, 'POW');
 
-  if (!beatsWall(hit, stuff)) {
+  const outResult = () => {
     let damage = ctx.noOutDamage ? 0 : e.OUT || 0;
     if (damage > 0 && ctx.outDamageScale != null) {
       damage = Math.floor(damage * ctx.outDamageScale);
     }
     return { type: 'OUT', reached: false, bases: 0, damage, hit, pow, wall: stuff };
+  };
+
+  if (!beatsWall(hit, stuff)) return outResult();
+
+  // Soft contact: barely clearing the wall still dies on the cutter.
+  if (ctx.softContact && hit === stuff + 1) {
+    return { ...outResult(), softContact: true };
   }
 
   let type = '1B', bases = 1, stretch = false;
   if (pow >= HOMER_AT) { type = 'HR'; bases = 4; }
   else if (pow >= DOUBLE_AT) { type = '2B'; bases = 2; }
   // Spark's legs are an ability, not a roll: once the pitcher is tiring he stretches every single.
-  else if (e.arch === 'SPARK' && state !== 'FRESH') { type = '2B'; bases = 2; stretch = true; }
+  else if (e.arch === 'SPARK' && state !== 'FRESH' && !ctx.noStretch) {
+    type = '2B'; bases = 2; stretch = true;
+  }
   return { type, reached: true, bases, stretch, damage: pow, hit, pow, wall: stuff };
 }
 
-/* bases hold {arch} or null. */
-export function advanceRunners(bases, r, batter, _rng) {
+/* bases hold {arch} or null.
+   opts.noStretch: Sparks on base take only the hit's bases (Maddux). */
+export function advanceRunners(bases, r, batter, _rng, opts = {}) {
   let runs = 0;
   const nb = [null, null, null];
   const n = r.bases;
   for (let i = 2; i >= 0; i--) {
     if (!bases[i]) continue;
     // A spark on the bases always takes the extra base on a single — exact, every time.
-    const mv = n === 1 && bases[i].arch === 'SPARK' ? 2 : n;
+    const mv = n === 1 && bases[i].arch === 'SPARK' && !opts.noStretch ? 2 : n;
     const to = i + mv;
     if (to >= 3) runs++;
     else nb[to] = bases[i];
@@ -278,21 +298,28 @@ export function simNight(lineup, gearMap, pitcher, rng, charms = []) {
       pos++; faced++; innFaced++;
       const seen = looks[slot]++;
       const state = stateOf(stamina, pitcher.pool);
-      const stuff = stuffAgainst(pitcher, state, seen, charms);
+      const runners = bases.filter(Boolean).length;
+      const stuff = stuffAgainst(pitcher, state, seen, charms, {
+        zone: e.zone, linked: e.linked, runners,
+      });
       const ctx = {
-        runners: bases.filter(Boolean).length,
+        runners,
         state,
         outs,
         seen,
         charms,
         noOutDamage: pitcher.efficient,
         outDamageScale: pitcher.halfOuts ? 0.5 : undefined,
+        noStretch: !!pitcher.noStretch,
+        softContact: !!pitcher.softContact,
+        muteCloser: !!pitcher.muteCloser,
+        denyFirstLook: !!pitcher.denyFirstLook,
       };
       const r = resolvePA(e, stuff, ctx, rng);
       stamina = Math.max(0, stamina - r.damage);
       if (!r.reached) outs++;
       else {
-        const a = advanceRunners(bases, r, { arch: e.arch }, rng);
+        const a = advanceRunners(bases, r, { arch: e.arch }, rng, { noStretch: !!pitcher.noStretch });
         bases = a.bases; innRuns += a.runs;
       }
     }

@@ -401,12 +401,19 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
 .set-badge{
   display:inline-block;font-size:7px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   padding:2px 5px;border-radius:3px;background:rgba(23,20,15,.12);color:var(--ink);line-height:1.15;
+  white-space:nowrap;
 }
 .set-badge.s-rookie{background:#C4B8A0;color:#1A1712}
-.set-badge.s-base{background:#8FB8D8;color:#102030}
-.set-badge.s-all-star{background:var(--bulb);color:#1A1206}
-.set-badge.s-world-series{background:linear-gradient(90deg,#E8C35A,#F2EDE0);color:#1A1206;
-  box-shadow:0 0 8px rgba(255,206,122,.45)}
+.set-badge.s-base{background:linear-gradient(180deg,#A6CBE8,#7FA9CB);color:#0B1520}
+.set-badge.s-all-star{background:linear-gradient(180deg,#FFCE7A,#EF9A2C);color:#1A1206;
+  box-shadow:0 0 9px rgba(255,179,71,.4)}
+.set-badge.s-world-series{color:#0C1A24;
+  background:linear-gradient(96deg,#8FE6FF,#FFFFFF 26%,#C6B4FF 44%,#FFBEEE 60%,#FFFFFF 76%,#8FE6FF);
+  background-size:260% 100%;
+  box-shadow:0 0 10px rgba(150,230,255,.6), inset 0 0 0 1px rgba(255,255,255,.6);
+  animation:badge-holo 4.2s linear infinite}
+/* 260% tile, so one tile of travel is 260/160 — anything else snaps at the loop */
+@keyframes badge-holo{from{background-position:0 0}to{background-position:162.5% 0}}
 .pc-head .set-badge{margin-left:auto;margin-right:4px}
 .bench .set-badge{margin-right:4px}
 .sell-btn{
@@ -464,7 +471,9 @@ body.dragging-owned #bench-tray{
 }
 .chips.tray-hot{outline:2px solid var(--bulb) !important;background:rgba(255,179,71,.1)}
 .pc-head{display:flex;justify-content:space-between;align-items:center;gap:4px;
-  background:var(--ink);color:var(--chalk);border-radius:7px 7px 0 0;padding:4px 8px}
+  background:var(--ink);color:var(--chalk);border-radius:7px 7px 0 0;padding:4px 8px;
+  position:relative;overflow:hidden;isolation:isolate;--hx:50%;--hy:50%}
+.pc-head > *{position:relative;z-index:3}
 .ord{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.3rem;line-height:1;flex:0 0 auto}
 .pc.at-bat .ord{color:var(--bulb)}
 .arch{
@@ -477,6 +486,151 @@ body.dragging-owned #bench-tray{
 .arch.a-RALLY{background:var(--good)}
 .arch.a-CLOSER{background:#E07A9A}
 .arch.a-PATIENT{background:#C4B06A}
+
+/* ================= set nameplates =================
+   The bar the set tag sits in is the rarity read. Stock climbs from matte
+   cardboard to full holofoil: Rookie is dry pulp, Topps gets a gloss coat,
+   All-Star a warm gold mesh, World Series a cool spectrum mesh under a
+   diffraction hatch. The two foils are built from drifting radial fields rather
+   than banding so they read as pooled light, and their palettes are kept apart
+   — All-Star stays warm, World Series stays cool — so the tiers never blur
+   together. Two pseudo-elements per head do the painting — ::before is the
+   pigment, ::after is the light on top — and the head isolates so the blend
+   modes stay inside the nameplate.
+   --hx/--hy are driven by the pointer in app/main.js; they park at centre. */
+.pc:is(.set-rookie,.set-base,.set-all-star,.set-world-series) .pc-head:before,
+.pc:is(.set-rookie,.set-base,.set-all-star,.set-world-series) .pc-head:after{
+  content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+}
+.pc:is(.set-rookie,.set-base,.set-all-star,.set-world-series) .pc-head:before{z-index:1}
+.pc:is(.set-rookie,.set-base,.set-all-star,.set-world-series) .pc-head:after{z-index:2}
+
+/* Rookie — uncoated cardboard, no shine at all */
+.pc.set-rookie .pc-head{background:linear-gradient(180deg,#2B2118,#191309);
+  border-bottom:1px solid rgba(196,184,160,.2)}
+.pc.set-rookie .pc-head:before{
+  background:
+    repeating-linear-gradient(46deg,rgba(242,237,224,.05) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(-46deg,rgba(0,0,0,.2) 0 1px,transparent 1px 5px);
+}
+.pc.set-rookie .pc-head:after{display:none}
+
+/* Topps base — glossy stock: fine print lines, one slow glint per cycle */
+.pc.set-base .pc-head{background:linear-gradient(180deg,#14273A,#0B1520);
+  border-bottom:1px solid rgba(143,184,216,.3)}
+.pc.set-base .pc-head:before{
+  background:repeating-linear-gradient(90deg,rgba(143,184,216,.1) 0 1px,transparent 1px 6px);
+}
+.pc.set-base .pc-head:after{
+  background:linear-gradient(100deg,transparent 8%,rgba(190,224,255,.16) 30%,rgba(216,238,255,.4) 50%,
+    rgba(190,224,255,.16) 70%,transparent 92%);
+  background-size:200% 100%;mix-blend-mode:screen;opacity:.85;
+  animation:head-gloss 6.5s linear infinite;
+}
+
+/* All-Star — struck gold: a warm mesh of amber, copper and rose, no cool hues,
+   so it never gets mistaken for the World Series spectrum */
+.pc.set-all-star .pc-head{
+  background:
+    radial-gradient(110px 40px at var(--hx) var(--hy),rgba(255,214,140,.3),transparent 72%),
+    linear-gradient(102deg,#241705,#170F09 46%,#241305);
+  border-bottom:1px solid rgba(255,206,122,.42);
+  box-shadow:inset 0 0 18px rgba(255,179,71,.18);
+}
+.pc.set-all-star .pc-head:before{
+  background:
+    radial-gradient(58% 240% at 18% 42%,rgba(255,168,44,.82),transparent 64%),
+    radial-gradient(52% 220% at 52% 62%,rgba(226,88,72,.76),transparent 66%),
+    radial-gradient(46% 260% at 78% 34%,rgba(255,224,150,.8),transparent 62%),
+    radial-gradient(60% 230% at 96% 70%,rgba(176,88,32,.74),transparent 68%);
+  background-size:150% 100%,185% 100%,225% 100%,260% 100%;
+  background-position:0 50%,0 50%,0 50%,0 50%;
+  opacity:.5;
+  filter:blur(2.4px) saturate(1.15);
+  animation:mesh-gold 9s linear infinite;
+}
+.pc.set-all-star .pc-head:after{
+  background:linear-gradient(104deg,transparent 6%,rgba(255,255,255,.22) 28%,rgba(255,240,205,.5) 50%,
+    rgba(255,255,255,.22) 72%,transparent 94%);
+  background-size:200% 100%;mix-blend-mode:overlay;opacity:.8;
+  animation:head-gloss 5.4s linear infinite;
+}
+
+/* World Series — holofoil: a cool cyan/violet/magenta mesh over an indigo base,
+   under a diffraction hatch, with the hotspot tracking the cursor */
+.pc.set-world-series .pc-head{
+  background:
+    radial-gradient(130px 44px at var(--hx) var(--hy),rgba(214,244,255,.22),transparent 70%),
+    conic-gradient(from 210deg at 30% 120%,#1C1826,#11151D,#131C22,#1A1524,#1C1826);
+  border-bottom:1px solid rgba(150,230,255,.55);
+  box-shadow:inset 0 0 22px rgba(120,210,255,.2);
+}
+.pc.set-world-series .pc-head:before{
+  background:
+    radial-gradient(60% 260% at 25% 40%,rgba(64,214,255,.85),transparent 62%),
+    radial-gradient(55% 240% at 60% 66%,rgba(150,72,255,.8),transparent 64%),
+    radial-gradient(50% 260% at 40% 30%,rgba(255,54,170,.8),transparent 60%),
+    radial-gradient(58% 250% at 70% 72%,rgba(56,240,180,.75),transparent 64%);
+  background-size:120% 100%,145% 100%,165% 100%,190% 100%;
+  background-position:0 50%,0 50%,0 50%,0 50%;
+  opacity:.62;
+  filter:blur(2px) saturate(1.35);
+  animation:mesh-holo 6.5s linear infinite;
+}
+.pc.set-world-series .pc-head:after{
+  background:
+    repeating-linear-gradient(52deg,rgba(255,255,255,.1) 0 1px,transparent 1px 5px),
+    linear-gradient(106deg,transparent 4%,rgba(255,255,255,.28) 26%,rgba(226,248,255,.6) 50%,
+      rgba(255,255,255,.28) 74%,transparent 96%);
+  background-size:auto,200% 100%;mix-blend-mode:overlay;opacity:.8;
+  animation:head-hatch-gloss 4s linear infinite;
+}
+/* Every layer travels a whole number of its own tiles per cycle, so each one
+   loops seamlessly while drifting at its own rate — that relative slip is what
+   keeps the mesh kneading instead of sliding past as a fixed pattern. */
+@keyframes mesh-gold{
+  from{background-position:0 50%,0 50%,0 50%,0 50%}
+  to{background-position:300% 50%,-217.647% 50%,180% 50%,-162.5% 50%}
+}
+@keyframes mesh-holo{
+  from{background-position:0 50%,0 50%,0 50%,0 50%}
+  to{background-position:600% 50%,-322.222% 50%,253.846% 50%,-211.111% 50%}
+}
+@keyframes head-gloss{from{background-position:100% 0}to{background-position:-100% 0}}
+@keyframes head-hatch-gloss{from{background-position:0 0,100% 0}to{background-position:0 0,-100% 0}}
+
+/* A rack of real cards doesn't catch the light in unison, so hand each seat in
+   the order its own head start. The offsets are deliberately uneven so they
+   never line up with each other or with a cycle length. */
+.pc:is(.set-base,.set-all-star,.set-world-series) .pc-head:before,
+.pc:is(.set-base,.set-all-star,.set-world-series) .pc-head:after{
+  animation-delay:var(--foil-lag,0s);
+}
+.pc:nth-child(2){--foil-lag:-.83s}
+.pc:nth-child(3){--foil-lag:-1.71s}
+.pc:nth-child(4){--foil-lag:-2.44s}
+.pc:nth-child(5){--foil-lag:-3.19s}
+.pc:nth-child(6){--foil-lag:-4.02s}
+.pc:nth-child(7){--foil-lag:-4.77s}
+.pc:nth-child(8){--foil-lag:-5.55s}
+.pc:nth-child(9){--foil-lag:-6.31s}
+
+/* the slot number sits straight on the foil, so give it something to sit on */
+.pc:is(.set-all-star,.set-world-series) .ord{text-shadow:0 1px 4px rgba(0,0,0,.8)}
+
+/* picking a card up brings the foil to life */
+.pc.set-all-star:hover .pc-head:before,.pc.set-all-star.at-bat .pc-head:before{opacity:.62}
+.pc.set-world-series:hover .pc-head:before,.pc.set-world-series.at-bat .pc-head:before{opacity:.7}
+.pc.set-world-series:hover .pc-head,.pc.set-world-series.at-bat .pc-head{
+  box-shadow:inset 0 0 26px rgba(120,210,255,.32)}
+
+@media (prefers-reduced-motion:reduce){
+  .pc-head:before,.pc-head:after{animation:none !important}
+  .pc.set-base .pc-head:after{background-position:50% 0}
+  .pc.set-all-star .pc-head:after{background-position:50% 0}
+  .pc.set-world-series .pc-head:after{background-position:0 0,50% 0}
+}
+
 /* Floating tip — body-level so lineup cards can't cover it */
 .game-tip{
   position:fixed;left:0;top:0;z-index:200;max-width:240px;padding:9px 11px;border-radius:6px;
@@ -545,7 +699,9 @@ body.dragging-owned #bench-tray{
     rgba(255,255,255,.5) 53%,transparent 68%);
   background-size:280% 100%;mix-blend-mode:overlay;opacity:.55;
   animation:sheen 7s linear infinite}
-.pc.set-world-series:after{animation-duration:4.6s;opacity:.85}
+.pc.set-world-series:after{animation-duration:4.6s;opacity:.85;
+  background-image:linear-gradient(105deg,transparent 32%,rgba(255,255,255,.5) 47%,rgba(222,246,255,.75) 50%,
+    rgba(255,255,255,.5) 53%,transparent 68%)}
 @keyframes sheen{from{background-position:180% 0}to{background-position:-120% 0}}
 
 /* --- the payoff strip: what is working for this batter, right now --- */
@@ -841,10 +997,18 @@ body[data-phase="title"] .wrap{padding:0;max-width:none}
   position:fixed;inset:0;z-index:50;margin:0;border:0;border-radius:0;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   text-align:center;padding:min(12vh,96px) 28px 40px;
-  background:
-    linear-gradient(180deg, rgba(10,19,14,.55) 0%, rgba(10,19,14,.18) 38%, rgba(10,19,14,.42) 72%, rgba(10,19,14,.78) 100%),
-    url('/title-bg.png') center / cover no-repeat;
-  box-shadow:none;
+  /* Still image is the fallback plane if the looping video never paints. */
+  background:url('/title-bg.png') center / cover no-repeat;
+  box-shadow:none;overflow:hidden;
+}
+.title-bg-video{
+  position:absolute;inset:0;z-index:0;width:100%;height:100%;
+  object-fit:cover;pointer-events:none;
+}
+.title-screen > :not(.title-bg-video){position:relative;z-index:1}
+.title-screen::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg, rgba(10,19,14,.55) 0%, rgba(10,19,14,.18) 38%, rgba(10,19,14,.42) 72%, rgba(10,19,14,.78) 100%);
 }
 .title-brand{
   font-family:'Alfa Slab One',serif;font-size:clamp(3.4rem,9vw,6.2rem);letter-spacing:.04em;
@@ -853,18 +1017,6 @@ body[data-phase="title"] .wrap{padding:0;max-width:none}
 .title-tag{
   color:var(--chalk);letter-spacing:.08em;margin:12px 0 28px;font-size:13px;
   text-shadow:0 1px 8px rgba(10,19,14,.65);
-}
-.title-ladder{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:14px}
-.title-arm{
-  border:1px solid var(--chalk-faint);border-radius:8px;padding:8px 12px;min-width:120px;
-  background:rgba(10,19,14,.55);backdrop-filter:blur(4px);
-}
-.title-arm .ta-name{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.05rem}
-.title-arm .ta-pit{font-size:10px;color:var(--chalk-dim);margin-top:2px}
-.title-arm.locked{opacity:.35}
-.title-next{
-  font-size:11px;color:var(--bulb);letter-spacing:.06em;margin:0 0 18px;min-height:1.2em;
-  text-shadow:0 1px 8px rgba(10,19,14,.7);
 }
 .title-screen .act.go{margin:0 auto}
 

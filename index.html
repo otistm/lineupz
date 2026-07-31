@@ -68,10 +68,14 @@
 
   <!-- ============ title / meta ============ -->
   <div class="title-screen" id="title-screen">
+    <video class="title-bg-video" id="title-bg-video"
+      autoplay muted loop playsinline preload="auto"
+      poster="/title-bg.png"
+      aria-hidden="true">
+      <source src="/lineupz_bg.mp4" type="video/mp4">
+    </video>
     <div class="title-brand">LINEUPZ</div>
-    <p class="title-tag">Build the sequence. Break the pitcher.</p>
-    <div class="title-ladder" id="title-ladder"></div>
-    <p class="title-next" id="title-next"></p>
+    <p class="title-tag">Break the pitcher.</p>
     <button type="button" class="act go" id="new-run">NEW RUN</button>
   </div>
 
