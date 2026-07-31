@@ -77,7 +77,7 @@
 
   <!-- ============ path map (hex island) ============ -->
   <div class="path-map hidden" id="path-map">
-    <div class="chalk-h"><span id="map-title">Path to —</span><b id="map-gold-live"></b></div>
+    <div class="chalk-h"><span id="map-title">Path to —</span></div>
     <div class="hex-stage" id="hex-stage">
       <div class="hex-field" id="hex-field"></div>
       <div class="hex-peek" id="hex-peek" role="status" aria-live="polite"></div>
@@ -95,7 +95,7 @@
   <!-- ============ draft / sponsors market ============ -->
   <div class="market hidden" id="market">
     <div class="draft" id="draft">
-      <div class="chalk-h"><span>Player draft</span><b id="draft-gold-live"></b></div>
+      <div class="chalk-h"><span>Player draft</span></div>
       <div class="shop-row draft-row" id="draft-row"></div>
       <div class="shop-actions">
         <button type="button" class="act ghost" id="reroll">Reroll · 2g</button>
@@ -228,13 +228,38 @@
         <div class="summary" id="summary"></div>
       </div>
       <div class="recap-col">
-        <div class="chalk-h"><span>Play by play</span><b id="log-head">—</b></div>
+        <div class="chalk-h">
+          <span>Play by play</span>
+          <span class="pbp-head-actions">
+            <b id="log-head">—</b>
+            <button type="button" class="pbp-expand" id="pbp-expand" hidden>Expand</button>
+          </span>
+        </div>
         <div class="log" id="log"></div>
       </div>
     </div>
   </div>
 
 </div>
+
+<!-- ============ expanded play-by-play overlay ============ -->
+<div class="pbp-overlay" id="pbp-overlay" hidden aria-hidden="true">
+  <button type="button" class="pbp-backdrop" id="pbp-backdrop" aria-label="Close play by play"></button>
+  <div class="pbp-sheet" role="dialog" aria-modal="true" aria-labelledby="pbp-title">
+    <div class="pbp-sheet-head">
+      <div>
+        <div class="pbp-kicker">Night recap</div>
+        <h2 id="pbp-title">Play by play</h2>
+      </div>
+      <div class="pbp-sheet-meta">
+        <b id="pbp-score">—</b>
+        <button type="button" class="act ghost pbp-close" id="pbp-close">Close</button>
+      </div>
+    </div>
+    <div class="pbp-log" id="pbp-log"></div>
+  </div>
+</div>
+
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

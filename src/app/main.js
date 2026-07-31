@@ -10,7 +10,6 @@ import {
   boardSetup,
   battingOrder,
   stuffAgainst,
-  beatsWall,
   modifiersFor,
   zoneOf,
   lookAt,
@@ -397,8 +396,12 @@ function fireLinksInto(slot) {
 }
 
 /* =================== draft / sponsor helpers =================== */
+/** Lineup / roster / rack edits — any stop before the night starts. */
+function setupPhaseOk() {
+  return !S.playing && ['map', 'event', 'draft', 'sponsors', 'dugout'].includes(S.phase);
+}
 function assembleOk() {
-  return S.phase === 'dugout' && !S.playing;
+  return setupPhaseOk();
 }
 function draftPhaseOk() {
   return S.phase === 'draft' && !S.playing;
@@ -806,7 +809,7 @@ function renderPhaseChrome() {
     sb.classList.toggle('hidden', !live);
     sb.classList.toggle('live', live && wasHidden);
   }
-  dugout?.classList.toggle('assemble', S.phase === 'dugout');
+  dugout?.classList.toggle('assemble', setupPhaseOk());
   // Setup chrome leaves the stage for the night: rack/roster, how-it-works, phases.
   const nightOn = S.playing || ['playing', 'won', 'lost', 'champion', 'dead'].includes(S.phase);
   // Keep dugout visible on map/event so roster/charms stay in view; hide only on title/night.
@@ -831,25 +834,82 @@ function upgradeableLineages() {
 }
 const UP_CHEV = '<span class="up-chev" aria-hidden="true"></span>';
 
-/** Exact read vs tonight's pitcher: the first state where this HIT beats the pitch.
-    Pass effective HIT on lineup cards (zone/gear/links already in); draft uses the raw card. */
-const STATE_SEQ = ['FRESH', 'LABORING', 'GASSED', 'BROKEN'];
-function vsArmRow(hit, { effective = false } = {}) {
-  const pit = pitcherOf(S.rung);
-  const at = STATE_SEQ.find((st) => beatsWall(hit, stuffAgainst(pit, st, 0, S.charms)));
-  const label = at ? `HIT clears ${STATE_INFO[at].label} pitch` : 'HIT never clears pitch';
-  const cls = at === 'FRESH' ? 'ok' : at ? 'mid' : 'no';
-  const tip = effective
-    ? "This bat's HIT (with seat, gear, links) vs tonight's pitch"
-    : "Card HIT vs tonight's pitch — before seat, gear and link bonuses";
-  return `<div class="vs-arm" title="${tip}">
-    <span class="vsw ${cls}">${label}</span>
-  </div>`;
+function tipAttr(text) {
+  return String(text || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
+/** Arch chip with hover tip for the full ability. */
+function archTag(arch) {
+  const info = ARCH_INFO[arch] || { label: arch, ability: '' };
+  return `<span class="arch a-${arch}" data-tip="${tipAttr(info.ability)}" tabindex="0">${info.label}</span>`;
+}
+
+/** Body-level tip so card stacking can't cover it. */
+function tipEl() {
+  let el = $('#game-tip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'game-tip';
+    el.className = 'game-tip';
+    el.setAttribute('role', 'tooltip');
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function showTip(anchor, text) {
+  if (!anchor || !text) return;
+  const tip = tipEl();
+  tip.textContent = text;
+  tip.classList.add('on');
+  const r = anchor.getBoundingClientRect();
+  const pad = 10;
+  // Measure after show (opacity alone keeps layout).
+  const tw = tip.offsetWidth || 200;
+  const th = tip.offsetHeight || 48;
+  let x = r.left + r.width / 2 - tw / 2;
+  let y = r.top - th - pad;
+  if (y < 8) y = r.bottom + pad;
+  x = Math.max(8, Math.min(x, window.innerWidth - tw - 8));
+  tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+
+function hideTip() {
+  $('#game-tip')?.classList.remove('on');
+}
+
+function initTips() {
+  let host = null;
+  document.addEventListener('pointerover', (e) => {
+    const el = e.target.closest?.('[data-tip]');
+    if (!el || el === host) return;
+    host = el;
+    showTip(el, el.getAttribute('data-tip'));
+  });
+  document.addEventListener('pointerout', (e) => {
+    const el = e.target.closest?.('[data-tip]');
+    if (!el || el !== host) return;
+    if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+    host = null;
+    hideTip();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest?.('[data-tip]');
+    if (!el) return;
+    host = el;
+    showTip(el, el.getAttribute('data-tip'));
+  });
+  document.addEventListener('focusout', (e) => {
+    const el = e.target.closest?.('[data-tip]');
+    if (!el || el !== host) return;
+    host = null;
+    hideTip();
+  });
+  window.addEventListener('scroll', hideTip, true);
+  window.addEventListener('resize', hideTip);
 }
 
 function renderDraft() {
-  const live = $('#draft-gold-live');
-  if (live) live.innerHTML = `${S.owned.length} roster · <span class="gold-ico"></span>${S.gold}`;
   const reroll = $('#reroll');
   if (reroll) {
     reroll.innerHTML = `Reroll · <span class="gold-ico"></span>${ECONOMY.rerollCost}`;
@@ -876,7 +936,7 @@ function renderDraft() {
       ${isUp ? UP_CHEV : ''}
       <div class="pc-head">
         <span class="set-badge s-${setCss(item.set)}">${setLabel(item.set)}</span>
-        <span class="arch a-${item.arch}">${ARCH_INFO[item.arch].label}</span>
+        ${archTag(item.arch)}
       </div>
       <div class="pc-body">
         <div class="pname">${item.n}</div>
@@ -885,8 +945,7 @@ function renderDraft() {
           <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">${item.HIT}</span></div>
           <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">${item.POW}</span></div>
         </div>
-        ${vsArmRow(item.HIT)}
-        <div class="prole" title="${ARCH_INFO[item.arch].ability}">${ARCH_INFO[item.arch].role}</div>
+        <div class="prole">${ARCH_INFO[item.arch].role}</div>
         <div class="pc-cost-row ${afford ? 'afford' : ''}">${locked ? 'Owned' : `<span class="gold-ico"></span>${cost}`}</div>
       </div>
       <div class="stamp"></div>
@@ -1017,8 +1076,6 @@ function hideHexPeek() {
 }
 
 function renderMap() {
-  const live = $('#map-gold-live');
-  if (live) live.innerHTML = `<span class="gold-ico"></span>${S.gold}`;
   const title = $('#map-title');
   const r = ladder()[S.rung];
   const pit = r ? PITCHERS.find((p) => p.id === r.pitcher) : null;
@@ -1156,7 +1213,7 @@ function renderEventFollowup() {
       return `<button type="button" class="pc draft-pc set-${setCss(item.set)}" data-event-pick="${i}">
         <div class="pc-head">
           <span class="set-badge s-${setCss(item.set)}">${setLabel(item.set)}</span>
-          <span class="arch a-${item.arch}">${ARCH_INFO[item.arch].label}</span>
+          ${archTag(item.arch)}
         </div>
         <div class="pc-body">
           <div class="pname">${item.n}</div>
@@ -1290,21 +1347,24 @@ function renderBoard() {
       .filter((l) => (l.to > l.from ? l.from === i : l.to === i))
       .map((l) => {
         const t = LINK_TYPES[l.type], wrap = l.to < l.from;
-        const icon = { WORN: '⚒', TABLESET: '⚑', ATTRITION: '⛏', IGNITE: '✦' }[l.type];
-        return `<span class="linkchip l-${l.type}${wrap ? ' wrap' : ''}" data-link="${l.from}-${l.to}-${l.type}"
-          title="${t.label} — ${t.gives}">${icon}</span>`;
+        const icon = {
+          WORN: '⚒', TABLESET: '⚑', ATTRITION: '⛏', IGNITE: '✦',
+          CLEANUP: '⚡', SHUTDOWN: '▣', WALKOFF: '◇', LONG_AB: '◷',
+        }[l.type] || '•';
+        const tip = t.tip || `${t.label} — ${t.gives}`;
+        return `<span class="linkchip l-${l.type}${wrap ? ' is-wrap' : ''}" data-link="${l.from}-${l.to}-${l.type}"
+          data-tip="${tipAttr(tip)}" tabindex="0"><i class="linkchip-ico" aria-hidden="true">${icon}</i></span>`;
       }).join('');
 
     const canUp = upLins.has(p.lineage);
     return `<div class="pc set-${setCss(p.set)}${dc}${canUp ? ' upgrade' : ''}" ${ds} data-slot="${i}" data-player="${p.id}" data-drag-player="${p.id}">
       ${canUp ? UP_CHEV : ''}
-      <div class="pc-head"><span class="ord">${i + 1}</span><span class="set-badge s-${setCss(p.set)}">${setLabel(p.set)}</span><span class="arch a-${p.arch}">${ARCH_INFO[p.arch].label}</span></div>
+      <div class="pc-head"><span class="ord">${i + 1}</span><span class="set-badge s-${setCss(p.set)}">${setLabel(p.set)}</span>${archTag(p.arch)}</div>
       <div class="pc-body">
         <div class="pname">${p.n}</div>
         <div class="pmeta">${p.y} · ${p.team}</div>
         <div class="bignums">${stats}</div>
-        ${vsArmRow(e.HIT, { effective: true })}
-        <div class="prole" title="${ARCH_INFO[p.arch].ability}">${ARCH_INFO[p.arch].role}</div>
+        <div class="prole">${ARCH_INFO[p.arch].role}</div>
       </div>
       <div class="track" data-track="${p.id}">${items}${cells}</div>
       ${chips}
@@ -1506,7 +1566,9 @@ function renderTray() {
   const bench = S.owned.map(byId).filter((h) => h && !inLineup.has(h.id));
   const benchCount = $('#bench-count');
   const benchTray = $('#bench-tray');
-  if (benchCount) benchCount.textContent = `${bench.length} on roster`;
+  if (benchCount) benchCount.textContent = setupPhaseOk()
+    ? `${bench.length} · drag into the order`
+    : `${bench.length} on roster`;
   const canSellBat = S.owned.length > 1;
   const upLins = upgradeableLineages();
   if (benchTray) {
@@ -1958,7 +2020,7 @@ document.addEventListener('pointerdown', (e) => {
   if (e.target.closest('.sell-btn')) return;
   if (e.target.closest('.sponsor-pick')) return;
   if (S.playing || drag) return;
-  if (!['draft', 'sponsors', 'dugout'].includes(S.phase)) return;
+  if (!setupPhaseOk()) return;
 
   const draftEl = e.target.closest('[data-draft]');
   const spEl = draftEl ? null : e.target.closest('[data-sponsor-offer]');
@@ -1974,8 +2036,7 @@ document.addEventListener('pointerdown', (e) => {
     const [si, oi] = spEl.dataset.sponsorOffer.split(':').map(Number);
     if (!S.sponsors[si]?.offers[oi]) return;
   } else if (gearEl || playerEl) {
-    // Seat / equip during draft or dugout; sponsors only for rack gear clicks elsewhere.
-    if (S.phase === 'sponsors' && !gearEl) return;
+    // Seat bats / move gear anytime before the night — map, shops, dugout.
   } else {
     return;
   }
@@ -2271,9 +2332,34 @@ function clearResults() {
   $('#log').innerHTML = '';
   $('#summary').textContent = '';
   $('#verdict-top').innerHTML = '';
+  const expand = $('#pbp-expand');
+  if (expand) expand.hidden = true;
+  closePlayByPlay();
   const p = pitcherOf(S.rung);
   setStamina(p.pool, p.pool);
   setWall(freshWall());
+}
+
+function openPlayByPlay() {
+  const src = $('#log');
+  const overlay = $('#pbp-overlay');
+  const dest = $('#pbp-log');
+  if (!src || !overlay || !dest || !src.innerHTML.trim()) return;
+  dest.innerHTML = src.innerHTML;
+  const score = $('#pbp-score');
+  if (score) score.textContent = $('#log-head')?.textContent || '—';
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('pbp-open');
+  $('#pbp-close')?.focus();
+}
+
+function closePlayByPlay() {
+  const overlay = $('#pbp-overlay');
+  if (!overlay || overlay.hidden) return;
+  overlay.hidden = true;
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('pbp-open');
 }
 
 function showVerdict(kind, topHtml) {
@@ -2520,6 +2606,8 @@ async function playRound() {
     const finalState = stateOf(stamina, pit.pool);
     $('#log-head').textContent = `${totalRuns} of ${rung.target}`;
     $('#log').innerHTML = logLines.join('');
+    const expand = $('#pbp-expand');
+    if (expand) expand.hidden = !logLines.length;
     const topLook = Math.max(...looks);
     $('#summary').innerHTML =
       `You scored <b>${totalRuns}</b> (${inningRuns.join(' · ')} by inning) and needed <b>${rung.target}</b>. ` +
@@ -2718,6 +2806,9 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#rules-gotit')) { setRulesCollapsed(true); return; }
   if (e.target.closest('#rules-toggle')) { setRulesCollapsed(!$('#rules').classList.contains('collapsed')); return; }
 
+  if (e.target.closest('#pbp-expand')) { openPlayByPlay(); return; }
+  if (e.target.closest('#pbp-close') || e.target.closest('#pbp-backdrop')) { closePlayByPlay(); return; }
+
   if (e.target.closest('#speed')) { cycleSpeed(); return; }
 
   if (e.target.closest('#new-run')) { startNewRun(); return; }
@@ -2823,8 +2914,13 @@ document.addEventListener('click', (e) => {
   }
 });
 
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePlayByPlay();
+});
+
 initRules();
 initSpeed();
+initTips();
 initHexMapEvents();
 renderAll();
 renderScorecard();

@@ -97,14 +97,46 @@ export const zoneOf = (slot) => ZONES[Math.floor(slot / 3)];
 
 /* ---------- links: neighbours in the batting order feed each other ---------- */
 export const LINK_TYPES = {
-  WORN:      { label: 'Worn down', gives: 'softens the next bat',              short: 'softens next', HIT: 2 },
-  TABLESET:  { label: 'Table set', gives: 'sets the table for the slugger',    short: 'sets table', HIT: 3 },
-  ATTRITION: { label: 'Attrition', gives: 'both grinders wear the pitcher harder', short: 'wear harder', OUT: 1, both: true },
-  IGNITE:    { label: 'Ignition',  gives: 'lights the rally man',              short: 'lights rally', POW: 2 },
-  CLEANUP:   { label: 'Cleanup',   gives: 'slugger sets up the closer',        short: 'cleanup', POW: 2 },
-  SHUTDOWN:  { label: 'Shutdown',  gives: 'closer feeds the grinder',          short: 'shutdown', OUT: 1 },
-  WALKOFF:   { label: 'Walk-off',  gives: 'patient lights the spark',          short: 'walk-off', HIT: 2 },
-  LONG_AB:   { label: 'Long AB',   gives: 'both patients wear the pitcher',    short: 'long AB', OUT: 1, both: true },
+  WORN: {
+    label: 'Worn down', short: '+2 HIT next', HIT: 2,
+    gives: '+2 HIT to the next bat',
+    tip: 'Worn down — Grinder → next bat: that next bat gets +2 HIT.',
+  },
+  TABLESET: {
+    label: 'Table set', short: '+3 HIT slugger', HIT: 3,
+    gives: '+3 HIT to the Slugger',
+    tip: 'Table set — Spark → Slugger: the Slugger gets +3 HIT.',
+  },
+  ATTRITION: {
+    label: 'Attrition', short: '+1 out wear', OUT: 1, both: true,
+    gives: 'both Grinders: outs deal +1 STAM DMG',
+    tip: 'Attrition — Grinder → Grinder: both bats deal +1 STAM DMG on outs.',
+  },
+  IGNITE: {
+    label: 'Ignition', short: '+2 STAM DMG rally', POW: 2,
+    gives: '+2 STAM DMG to the Rally bat',
+    tip: 'Ignition — Spark → Rally: the Rally bat gets +2 STAM DMG.',
+  },
+  CLEANUP: {
+    label: 'Cleanup', short: '+2 STAM DMG closer', POW: 2,
+    gives: '+2 STAM DMG to the Closer',
+    tip: 'Cleanup — Slugger → Closer: the Closer gets +2 STAM DMG.',
+  },
+  SHUTDOWN: {
+    label: 'Shutdown', short: '+1 out wear', OUT: 1,
+    gives: 'Grinder outs deal +1 STAM DMG',
+    tip: 'Shutdown — Closer → Grinder: the Grinder deals +1 STAM DMG on outs.',
+  },
+  WALKOFF: {
+    label: 'Walk-off', short: '+2 HIT spark', HIT: 2,
+    gives: '+2 HIT to the Spark',
+    tip: 'Walk-off — Patient → Spark: the Spark gets +2 HIT.',
+  },
+  LONG_AB: {
+    label: 'Long AB', short: '+1 out wear', OUT: 1, both: true,
+    gives: 'both Patient bats: outs deal +1 STAM DMG',
+    tip: 'Long AB — Patient → Patient: both bats deal +1 STAM DMG on outs.',
+  },
 };
 
 export function computeLinks(lineup) {
