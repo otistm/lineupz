@@ -11,9 +11,11 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
+  /* Grass bed under a dark scrim so chalk UI stays readable. Title screen paints its own bed. */
   background:
-    radial-gradient(1400px 700px at 50% -14%, rgba(255,214,140,.13), transparent 62%),
-    repeating-linear-gradient(90deg, var(--turf) 0 104px, var(--night) 104px 208px);
+    linear-gradient(180deg, rgba(8,16,11,.78) 0%, rgba(8,16,11,.72) 45%, rgba(8,16,11,.82) 100%),
+    url('/grass-bg.png') center / cover no-repeat fixed;
+  background-color:var(--night);
   color:var(--chalk);font-family:'IBM Plex Mono',ui-monospace,monospace;
   font-size:13px;line-height:1.4;overflow-x:hidden;min-height:100vh;
 }
@@ -773,13 +775,12 @@ body.dragging-owned #bench-tray{
 .track.bad{box-shadow:inset 0 0 0 2.5px var(--out);animation:trackbad .35s ease}
 @keyframes trackbad{30%{filter:brightness(1.15)} 100%{filter:none}}
 .pc.slot-empty{
-  background:rgba(242,237,224,.07);border-style:dashed;border-color:var(--chalk-dim);
+  background:rgba(8,16,11,.72);border-style:dashed;border-color:var(--chalk-dim);
   box-shadow:0 5px 0 rgba(10,19,14,.35);color:var(--chalk-dim);min-height:270px;
 }
 .pc.slot-empty .pc-head{background:transparent;border-bottom:1px dashed var(--chalk-faint)}
 .pc.slot-empty .ord{opacity:.7;color:var(--chalk-dim)}
 .pc.slot-empty .empty-body{opacity:.55}
-.pc.slot-empty .pname.muted{font-size:2.4rem;opacity:.35;text-align:center;width:100%}
 .pc.slot-empty .bignum .bn-v{color:var(--chalk-dim);opacity:.4}
 .pc.slot-empty .empty-track{background:rgba(242,237,224,.06);border-color:transparent}
 .pc.slot-empty:hover{transform:translateY(-4px)}
@@ -821,6 +822,55 @@ body.dragging-owned #bench-tray{
 .inning-banner.go{animation:banner 1.05s cubic-bezier(.3,1,.4,1) both}
 @keyframes banner{0%{opacity:0;transform:translateX(-46vw) skewX(-8deg)}
   22%,72%{opacity:1;transform:translateX(0) skewX(0)}100%{opacity:0;transform:translateX(46vw) skewX(8deg)}}
+
+/* Fullscreen night card — lands between title / next map and the path */
+.night-intro{
+  position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  text-align:center;padding:32px;pointer-events:none;opacity:0;visibility:hidden;
+  background:
+    radial-gradient(900px 520px at 50% 42%, rgba(255,179,71,.12), transparent 62%),
+    rgba(6,12,9,.92);
+  transition:opacity .45s cubic-bezier(.22,1,.36,1), visibility 0s linear .45s;
+}
+.night-intro.on{
+  opacity:1;visibility:visible;pointer-events:auto;
+  transition:opacity .35s cubic-bezier(.22,1,.36,1), visibility 0s;
+}
+.night-intro-card{max-width:min(92vw,920px)}
+.night-intro-night{
+  font-family:'Alfa Slab One',serif;
+  font-size:clamp(2.4rem,8vw,5.4rem);letter-spacing:.06em;line-height:1;
+  color:var(--bulb);text-transform:uppercase;
+  text-shadow:0 3px 0 rgba(23,20,15,.45), 0 0 42px rgba(255,179,71,.4);
+  opacity:0;transform:translateY(28px) scale(.92);
+}
+.night-intro-pit{
+  margin-top:clamp(10px,2vh,22px);
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  font-size:clamp(2.8rem,11vw,7rem);letter-spacing:.02em;line-height:.92;
+  color:var(--chalk);text-transform:uppercase;
+  text-shadow:0 4px 0 rgba(10,19,14,.55), 0 0 48px rgba(242,237,224,.18);
+  opacity:0;transform:translateY(36px) scale(.94);
+}
+.night-intro.on .night-intro-night{
+  animation:night-kick 2.4s cubic-bezier(.2,1.15,.35,1) both;
+}
+.night-intro.on .night-intro-pit{
+  animation:night-name 2.4s cubic-bezier(.2,1.15,.35,1) .12s both;
+}
+.night-intro.out{opacity:0;pointer-events:none;transition:opacity .4s ease}
+@keyframes night-kick{
+  0%{opacity:0;transform:translateY(36px) scale(.88) skewX(-6deg);filter:blur(6px)}
+  18%{opacity:1;transform:translateY(0) scale(1.04) skewX(0);filter:blur(0)}
+  70%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:1;transform:translateY(-6px) scale(1)}
+}
+@keyframes night-name{
+  0%{opacity:0;transform:translateY(48px) scale(.9);filter:blur(8px);letter-spacing:.18em}
+  22%{opacity:1;transform:translateY(0) scale(1.02);filter:blur(0);letter-spacing:.02em}
+  70%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:.96;transform:translateY(-4px) scale(1)}
+}
 
 /* ================= dugout ================= */
 .dugout{margin-top:16px;border-top:3px solid var(--chalk);
@@ -1108,4 +1158,10 @@ body[data-phase="title"] .wrap{padding:0;max-width:none}
   #ghost,#ghost.ghost-live{transition:none !important;filter:drop-shadow(0 10px 12px rgba(0,0,0,.4))}
   .dragging,.drag-origin{transform:none}
   .path-map,.market,.event-panel{transition:none !important;transform:none !important}
+  /* Night card still holds on screen — just skip the slam. */
+  .night-intro.on .night-intro-night,
+  .night-intro.on .night-intro-pit{
+    animation:none !important;opacity:1 !important;transform:none !important;filter:none !important;
+  }
+  .night-intro,.night-intro.out{transition:opacity .25s ease !important}
 }

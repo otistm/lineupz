@@ -570,16 +570,41 @@ function enterTitlePhase() {
   renderAll();
 }
 
-function startNewRun() {
+async function showNightIntro() {
+  const el = $('#night-intro');
+  const nightEl = $('#night-intro-night');
+  const pitEl = $('#night-intro-pit');
+  const pit = pitcherOf(S.rung);
+  if (!el || !nightEl || !pitEl || !pit) return;
+  const n = S.rung + 1;
+  nightEl.textContent = `NIGHT ${n}`;
+  pitEl.textContent = pit.n;
+  el.setAttribute('aria-hidden', 'false');
+  el.classList.remove('out');
+  void el.offsetWidth;
+  el.classList.add('on');
+  audio.bell();
+  // Fixed beat — don't let Speed / turbo skip the night card.
+  await wait(REDUCED ? 700 : 2400);
+  el.classList.add('out');
+  el.classList.remove('on');
+  await wait(REDUCED ? 200 : 420);
+  el.classList.remove('out');
+  el.setAttribute('aria-hidden', 'true');
+}
+
+async function startNewRun() {
   S = freshRun();
   S.phase = 'map';
   S.mapNav = startActNav(S.map.acts[0]);
   $('#verdict').className = 'verdict';
   clearResults();
   $('#summary').textContent = '';
-  audio.bell();
+  // Arm the night card before paint so the map never peeks under it.
+  const intro = showNightIntro();
   updatePlayButton();
   renderAll();
+  await intro;
 }
 
 function enterMapPhase({ clearVerdict = true } = {}) {
@@ -1298,7 +1323,6 @@ function renderBoard() {
     if (!p) return `<div class="pc slot-empty${dc}" ${ds} data-slot="${i}">
       <div class="pc-head"><span class="ord">${i + 1}</span></div>
       <div class="pc-body empty-body">
-        <div class="pname muted">${i + 1}</div>
         <div class="bignums">
           <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">—</span></div>
           <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">—</span></div>
@@ -2925,8 +2949,9 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#advance')) {
     S.rung++;
     S.mapNav = startActNav(S.map.acts[S.rung]);
+    const intro = showNightIntro();
     enterMapPhase();
-    audio.bell();
+    void intro;
     return;
   }
   if (e.target.closest('#retry-shop')) {
