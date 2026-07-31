@@ -296,14 +296,14 @@ export const PITCHERS = [
 
 /** Night metadata keyed by pitcher id. */
 export const LADDER_DEFS = {
-  longman:  { pitcher: 'longman',  target: 1, name: 'Opening Night', blurb: 'Walk the path, draft bats, then break the soft opener.' },
-  maddux95: { pitcher: 'maddux95', target: 2, name: 'The Surgeon',   blurb: 'Outs are free for this pitcher — put the ball in play.' },
-  koufax65: { pitcher: 'koufax65', target: 2, name: 'The Fastball',  blurb: 'A brutal pitch while Fresh — wear the pitcher down early.' },
-  gibson68: { pitcher: 'gibson68', target: 2, name: 'The Bulldog',   blurb: 'Recovers between innings — keep rallies going.' },
-  pedro00:  { pitcher: 'pedro00',  target: 3, name: 'The Wall',      blurb: 'Deep tank, slow fade — every link has to fire.' },
-  unit95:   { pitcher: 'unit95',   target: 3, name: 'The Unit',      blurb: 'Intimidating Fresh edge — survive, then feast on the fade.' },
-  ryan73:   { pitcher: 'ryan73',   target: 3, name: 'The Express',   blurb: 'Huge pool, raw stuff — fill the order and grind.' },
-  mo99:     { pitcher: 'mo99',     target: 3, name: 'The Sandman',   blurb: 'Half-wear outs and a slow fade — contact is king.' },
+  longman:  { pitcher: 'longman',  target: 2, name: 'Opening Night', blurb: 'Walk the path, draft bats, then break the soft opener.' },
+  maddux95: { pitcher: 'maddux95', target: 3, name: 'The Surgeon',   blurb: 'Outs are free for this pitcher — put the ball in play.' },
+  koufax65: { pitcher: 'koufax65', target: 3, name: 'The Fastball',  blurb: 'A brutal pitch while Fresh — wear the pitcher down early.' },
+  gibson68: { pitcher: 'gibson68', target: 4, name: 'The Bulldog',   blurb: 'Recovers between innings — keep rallies going.' },
+  pedro00:  { pitcher: 'pedro00',  target: 4, name: 'The Wall',      blurb: 'Deep tank, slow fade — every link has to fire.' },
+  unit95:   { pitcher: 'unit95',   target: 5, name: 'The Unit',      blurb: 'Intimidating Fresh edge — survive, then feast on the fade.' },
+  ryan73:   { pitcher: 'ryan73',   target: 5, name: 'The Express',   blurb: 'Huge pool, raw stuff — fill the order and grind.' },
+  mo99:     { pitcher: 'mo99',     target: 6, name: 'The Sandman',   blurb: 'Half-wear outs and a slow fade — contact is king.' },
 };
 
 /** Meta unlock order. Fresh profiles start with the first START_UNLOCKED arms. */
