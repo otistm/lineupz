@@ -438,8 +438,17 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
   box-shadow:0 5px 0 #0A130E, 0 12px 24px var(--shadow);
   display:flex;flex-direction:column;min-height:270px;position:relative;
   transition:transform .18s cubic-bezier(.2,1.4,.4,1), box-shadow .18s, filter .3s;
+  /* Axis-aligned lifts stay sharp; rotation was making type go soft. */
+  backface-visibility:hidden;
 }
-.pc:hover{transform:translateY(-6px) rotate(-.4deg);box-shadow:0 9px 0 #0A130E, 0 20px 34px var(--shadow)}
+.pc:hover{
+  transform:translateY(-6px);z-index:4;
+  box-shadow:0 9px 0 #0A130E, 0 20px 34px var(--shadow);
+}
+/* When the card lifts, keep a hit bridge under it so hover can't flicker on/off. */
+.pc:hover:before{
+  content:'';position:absolute;left:0;right:0;top:100%;height:12px;
+}
 .pc.at-bat{transform:translateY(-12px) scale(1.045);z-index:5;
   box-shadow:0 0 0 3px var(--bulb), 0 10px 0 #0A130E, 0 26px 46px rgba(0,0,0,.6), 0 0 44px rgba(255,179,71,.4)}
 .pc.deal{animation:deal .5s cubic-bezier(.2,1.5,.4,1) both}
@@ -778,10 +787,16 @@ body.dragging-owned #bench-tray{
   background:rgba(8,16,11,.72);border-style:dashed;border-color:var(--chalk-dim);
   box-shadow:0 5px 0 rgba(10,19,14,.35);color:var(--chalk-dim);min-height:270px;
 }
-.pc.slot-empty .pc-head{background:transparent;border-bottom:1px dashed var(--chalk-faint)}
-.pc.slot-empty .ord{opacity:.7;color:var(--chalk-dim)}
-.pc.slot-empty .empty-body{opacity:.55}
-.pc.slot-empty .bignum .bn-v{color:var(--chalk-dim);opacity:.4}
+.pc.slot-empty .empty-body{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:12px 9px 8px;gap:10px;
+}
+.pc.slot-empty .empty-slot-n{
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  font-size:clamp(3.2rem,4.2vw,4.6rem);line-height:1;letter-spacing:.02em;
+  color:var(--chalk);opacity:.28;text-align:center;
+}
+.pc.slot-empty .zline{margin-top:0;opacity:.65;text-align:center}
 .pc.slot-empty .empty-track{background:rgba(242,237,224,.06);border-color:transparent}
 .pc.slot-empty:hover{transform:translateY(-4px)}
 .pc.shift-left{transform:translateX(-14px) !important;transition:transform .18s cubic-bezier(.22,1,.36,1)}
@@ -886,7 +901,7 @@ body.dragging-owned #bench-tray{
   box-shadow:0 3px 0 #0A130E;padding:8px 12px;cursor:grab;touch-action:none;user-select:none;
   -webkit-user-select:none;transition:transform .16s cubic-bezier(.22,1,.36,1), box-shadow .16s, opacity .15s;
   min-width:140px}
-.bench:hover{transform:translateY(-3px) rotate(-.6deg);box-shadow:0 6px 0 #0A130E}
+.bench:hover{transform:translateY(-3px);box-shadow:0 6px 0 #0A130E}
 .bench .bn{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.35rem;line-height:1;text-transform:uppercase}
 .bench .bs{font-size:10px;color:var(--ink-soft);letter-spacing:.04em;margin-top:4px;
   display:flex;align-items:center;gap:5px;flex-wrap:wrap}

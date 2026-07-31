@@ -1321,12 +1321,8 @@ function renderBoard() {
     const dc = first ? ' deal' : '';
     const zone = zoneOf(i);
     if (!p) return `<div class="pc slot-empty${dc}" ${ds} data-slot="${i}">
-      <div class="pc-head"><span class="ord">${i + 1}</span></div>
       <div class="pc-body empty-body">
-        <div class="bignums">
-          <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">—</span></div>
-          <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">—</span></div>
-        </div>
+        <div class="empty-slot-n">${i + 1}</div>
         <div class="zline" title="${zone.label}">${zone.label} · ${zone.gives}</div>
       </div>
       <div class="track empty-track"></div>
