@@ -37,7 +37,7 @@ import {
 import {
   generateRunMap, appendAct, assertActReachable, startActNav, advanceNav, retryBossNav, goldForNode,
 } from '../src/engine/map.js';
-import { applyEventEffect, claimFreeBatter } from '../src/engine/events.js';
+import { applyEventEffect, claimFreeBatter, settlePendingBet } from '../src/engine/events.js';
 import { ARCH_INFO } from '../src/engine/sim.js';
 
 function mulberry32(seed) {
@@ -385,6 +385,20 @@ const FUNDED_GEAR = {
   check('event draftOne opens a free pick', draftFu.followup?.type === 'draftOne' && draftFu.followup.offers.length >= 1);
   const free = claimFreeBatter(bag, draftFu.followup.offers[0].id);
   check('free batter claim adds to roster', free.ok && free.state.owned.length === 1);
+
+  const betBag = applyEventEffect({ ...bag, gold: 10, pendingBet: null }, { type: 'riskGold', n: 4 }, mulberry32(3));
+  check('scrimmage bet stakes now and defers the purse',
+    betBag.done && betBag.state.gold === 6
+    && betBag.state.pendingBet?.stake === 4
+    && betBag.state.pendingBet?.payout === 8);
+  const cashed = settlePendingBet(betBag.state, true);
+  check('scrimmage bet pays only after a win settles',
+    cashed.payout === 8 && cashed.state.gold === 14 && cashed.state.pendingBet == null);
+  const burned = settlePendingBet(betBag.state, false);
+  check('scrimmage bet burns the stake after a loss settles',
+    burned.payout === 0 && burned.state.gold === 6 && burned.state.pendingBet == null);
+  const broke = applyEventEffect({ ...bag, gold: 2, pendingBet: null }, { type: 'riskGold', n: 4 }, mulberry32(4));
+  check('scrimmage bet refuses if you cannot cover the stake', !broke.done && broke.state.gold === 2);
 }
 
 if (failed) {

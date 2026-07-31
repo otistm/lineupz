@@ -33,13 +33,14 @@ import {
   allNodes, HEX, hexPath, hexWall,
 } from '../engine/map.js';
 import {
-  applyEventEffect, claimFreeBatter, removeOwnedCard,
+  applyEventEffect, claimFreeBatter, removeOwnedCard, settlePendingBet,
 } from '../engine/events.js';
 import {
   loadMeta, ladderForRun, unlockAfterBeat, nextPitcherAfter,
 } from './meta.js';
 import { createLinkField, LINK_COLOR } from './linkfield.js';
 import { createField } from './field.js';
+import { createNightIntro } from './nightIntro.js';
 
 /* =================== plain language =================== */
 const RESULT = {
@@ -149,6 +150,7 @@ function freshRun(meta = loadMeta()) {
     mapNav: startActNav(map.acts[0]),
     event: null,
     eventFollowup: null,
+    pendingBet: null, // scrimmage stake — pays out only after tonight settles
     // title → map → draft|sponsors|event → dugout → playing → won|lost|champion|dead
     phase: 'title',
     playing: false,
@@ -570,6 +572,11 @@ function enterTitlePhase() {
   renderAll();
 }
 
+const nightIntro = createNightIntro(
+  document.getElementById('night-intro'),
+  document.getElementById('night-intro-gl'),
+);
+
 async function showNightIntro() {
   const el = $('#night-intro');
   const nightEl = $('#night-intro-night');
@@ -577,20 +584,34 @@ async function showNightIntro() {
   const pit = pitcherOf(S.rung);
   if (!el || !nightEl || !pitEl || !pit) return;
   const n = S.rung + 1;
-  nightEl.textContent = `NIGHT ${n}`;
-  pitEl.textContent = pit.n;
+  const kick = `NIGHT ${n}`;
+  const name = pit.n;
+  nightEl.textContent = kick;
+  pitEl.textContent = name;
   el.setAttribute('aria-hidden', 'false');
   el.classList.remove('out');
   void el.offsetWidth;
+
+  const useGl = !REDUCED && nightIntro.ok;
+  el.classList.toggle('gl', useGl);
   el.classList.add('on');
   audio.bell();
-  // Fixed beat — don't let Speed / turbo skip the night card.
-  await wait(REDUCED ? 700 : 2400);
+
+  if (useGl) {
+    // Stadium-lights hold; Speed / turbo must not skip it.
+    await nightIntro.play({ kick, name });
+  } else {
+    await wait(REDUCED ? 700 : 2400);
+  }
+
+  // Soft dissolve so the map eases in under the plate (not a hard cut).
+  void el.offsetWidth;
   el.classList.add('out');
   el.classList.remove('on');
-  await wait(REDUCED ? 200 : 420);
-  el.classList.remove('out');
+  await wait(REDUCED ? 220 : 780);
+  el.classList.remove('out', 'gl');
   el.setAttribute('aria-hidden', 'true');
+  nightIntro.stop();
 }
 
 async function startNewRun() {
@@ -2717,6 +2738,12 @@ function finishRound(runs, rung, finalState, brokeInning) {
   const charmWin = sumCharmEffect(S.charms, 'goldOnWin');
   const charmLoss = sumCharmEffect(S.charms, 'lossGoldBonus');
 
+  // Scrimmage bets cash only after the night settles — stake was already paid.
+  const bet = settlePendingBet({ gold: S.gold, pendingBet: S.pendingBet }, won);
+  S.gold = bet.state.gold;
+  S.pendingBet = null;
+  const betLine = bet.log ? `<br>${bet.log}.` : '';
+
   // Complete the boss node on the map whenever the night ends.
   const bossNodeId = S.mapNav?.current;
   if (bossNodeId && won) {
@@ -2748,7 +2775,7 @@ function finishRound(runs, rung, finalState, brokeInning) {
       : '';
     showVerdict('win', `<div class="v-title">YOU WIN</div>
       <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>${brokeInning ? ` — and you <b>broke the pitcher</b> in inning ${brokeInning}` : ''}.
-      Earned <span class="v-reward">+${pay}g</span> (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.${unlockLine}<br>
+      Earned <span class="v-reward">+${pay}g</span>${bet.payout ? ` · bet <span class="v-reward">+${bet.payout}g</span>` : ''} (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.${betLine}${unlockLine}<br>
       Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Walk the next path.'}${rematchNote}</div>
       <button class="act go" id="advance" style="flex:0 0 auto">NEXT MAP</button>`);
     audio.win(); confetti();
@@ -2769,7 +2796,7 @@ function finishRound(runs, rung, finalState, brokeInning) {
     S.phase = 'dead';
     showVerdict('lose', `<div class="v-title">THE RUN IS OVER</div>
       <div class="v-body">You scored <b>${runs}</b> and needed <b>${rung.target}</b> against ${pit.n}.
-      No lives left — that is the only way a run ends. You made it to opponent <b>${S.rung + 1}</b>.<br>${excuse}</div>
+      No lives left — that is the only way a run ends. You made it to opponent <b>${S.rung + 1}</b>.${betLine}<br>${excuse}</div>
       <button class="act go" id="restart" style="flex:0 0 auto">BACK TO TITLE</button>`);
     audio.lose();
     renderWallet(); updatePlayButton();
@@ -2782,7 +2809,7 @@ function finishRound(runs, rung, finalState, brokeInning) {
   S.phase = 'lost';
   showVerdict('lose', `<div class="v-title">THE PITCHER HELD YOU</div>
     <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>. Lost a life — <b>${S.lives}</b> left.
-    Consolation <span class="v-reward">+${lossPay}g</span> (now <b>${S.gold}g</b>).<br>
+    Consolation <span class="v-reward">+${lossPay}g</span> (now <b>${S.gold}g</b>).${betLine}<br>
     ${excuse} The same pitcher is waiting — walk the path again.</div>
     <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO MAP</button>`);
   audio.lose();
@@ -2812,6 +2839,7 @@ function applyRunBag(bag) {
   S.charms = bag.charms;
   S.gearMap = bag.gearMap;
   if (bag.lineup) S.lineup = bag.lineup;
+  if ('pendingBet' in bag) S.pendingBet = bag.pendingBet;
 }
 
 function resolveEventChoice(choiceIdx) {
@@ -2826,6 +2854,7 @@ function resolveEventChoice(choiceIdx) {
     gearMap: S.gearMap,
     lineup: S.lineup,
     rung: S.rung,
+    pendingBet: S.pendingBet,
   }, choice.effect);
   applyRunBag(state);
   if (!done) {

@@ -840,40 +840,52 @@ body.dragging-owned #bench-tray{
 
 /* Fullscreen night card — lands between title / next map and the path */
 .night-intro{
-  position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  position:fixed;inset:0;z-index:140;display:flex;align-items:center;justify-content:center;
   text-align:center;padding:32px;pointer-events:none;opacity:0;visibility:hidden;
   background:
     radial-gradient(900px 520px at 50% 42%, rgba(255,179,71,.12), transparent 62%),
     rgba(6,12,9,.92);
-  transition:opacity .45s cubic-bezier(.22,1,.36,1), visibility 0s linear .45s;
+  transition:opacity .75s cubic-bezier(.22,1,.36,1), visibility 0s linear .75s;
 }
 .night-intro.on{
   opacity:1;visibility:visible;pointer-events:auto;
   transition:opacity .35s cubic-bezier(.22,1,.36,1), visibility 0s;
 }
-.night-intro-card{max-width:min(92vw,920px)}
+.night-intro.gl{
+  padding:0;background:#000;
+}
+.night-intro-gl{
+  display:none;position:absolute;inset:0;width:100%;height:100%;
+}
+.night-intro.gl .night-intro-gl{display:block}
+.night-intro.gl .night-intro-card{display:none}
+.night-intro-card{max-width:min(92vw,920px);position:relative;z-index:1}
 .night-intro-night{
-  font-family:'Alfa Slab One',serif;
-  font-size:clamp(2.4rem,8vw,5.4rem);letter-spacing:.06em;line-height:1;
+  font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  font-size:clamp(1.4rem,4.5vw,2.4rem);letter-spacing:.42em;line-height:1;
   color:var(--bulb);text-transform:uppercase;
   text-shadow:0 3px 0 rgba(23,20,15,.45), 0 0 42px rgba(255,179,71,.4);
   opacity:0;transform:translateY(28px) scale(.92);
 }
 .night-intro-pit{
   margin-top:clamp(10px,2vh,22px);
-  font-family:'Big Shoulders Display',sans-serif;font-weight:800;
+  font-family:'Alfa Slab One',serif;
   font-size:clamp(2.8rem,11vw,7rem);letter-spacing:.02em;line-height:.92;
   color:var(--chalk);text-transform:uppercase;
   text-shadow:0 4px 0 rgba(10,19,14,.55), 0 0 48px rgba(242,237,224,.18);
   opacity:0;transform:translateY(36px) scale(.94);
 }
-.night-intro.on .night-intro-night{
+.night-intro.on:not(.gl) .night-intro-night{
   animation:night-kick 2.4s cubic-bezier(.2,1.15,.35,1) both;
 }
-.night-intro.on .night-intro-pit{
+.night-intro.on:not(.gl) .night-intro-pit{
   animation:night-name 2.4s cubic-bezier(.2,1.15,.35,1) .12s both;
 }
-.night-intro.out{opacity:0;pointer-events:none;transition:opacity .4s ease}
+.night-intro.out{
+  opacity:0;pointer-events:none;visibility:visible;
+  transition:opacity .75s cubic-bezier(.4,0,.2,1), visibility 0s linear .75s;
+}
+.night-intro.gl.out{background:transparent}
 @keyframes night-kick{
   0%{opacity:0;transform:translateY(36px) scale(.88) skewX(-6deg);filter:blur(6px)}
   18%{opacity:1;transform:translateY(0) scale(1.04) skewX(0);filter:blur(0)}

@@ -25,7 +25,7 @@ export function availableCharms(ownedCharmIds) {
 
 /**
  * Apply a choice effect.
- * state: { gold, owned, loose, charms, gearMap, lineup, rung }
+ * state: { gold, owned, loose, charms, gearMap, lineup, rung, pendingBet }
  * Returns { state, log, followup } where followup may be
  *   { type: 'draftOne', offers } | { type: 'removeCard' } | null
  */
@@ -38,6 +38,7 @@ export function applyEventEffect(state, effect, rng = Math.random) {
     gearMap: { ...state.gearMap },
     lineup: state.lineup,
     rung: state.rung,
+    pendingBet: state.pendingBet || null,
   };
   const log = [];
   let followup = null;
@@ -53,14 +54,18 @@ export function applyEventEffect(state, effect, rng = Math.random) {
     next.gold -= n;
     log.push(`−${n}g`);
   } else if (type === 'riskGold') {
+    // Stake now; payout waits for tonight's result (see settlePendingBet).
     const n = effect.n || 0;
-    if (rng() < 0.5) {
-      next.gold += n * 2;
-      log.push(`Won the bet · +${n * 2}g`);
+    if (next.pendingBet) {
+      log.push('Already have a bet down');
+      done = false;
+    } else if (next.gold < n) {
+      log.push('Not enough gold to bet');
+      done = false;
     } else {
-      const lost = Math.min(next.gold, n);
-      next.gold -= lost;
-      log.push(`Lost the bet · −${lost}g`);
+      next.gold -= n;
+      next.pendingBet = { stake: n, payout: n * 2 };
+      log.push(`Bet ${n}g on tonight · collect ${n * 2}g if you win`);
     }
   } else if (type === 'draftOne') {
     const offers = generateDraft(next.rung, next.owned, rng).slice(0, ECONOMY.eventDraftSlots);
@@ -119,6 +124,21 @@ export function applyEventEffect(state, effect, rng = Math.random) {
   }
 
   return { state: next, log, followup, done };
+}
+
+/**
+ * Cash or burn a scrimmage bet after the night resolves.
+ * Stake was already taken when the bet was placed.
+ */
+export function settlePendingBet(state, won) {
+  const bet = state.pendingBet;
+  if (!bet) return { state, payout: 0, log: null };
+  const next = { ...state, pendingBet: null };
+  if (won) {
+    next.gold += bet.payout;
+    return { state: next, payout: bet.payout, stake: bet.stake, log: `Scrimmage bet cashed · +${bet.payout}g` };
+  }
+  return { state: next, payout: 0, stake: bet.stake, log: `Scrimmage bet lost · −${bet.stake}g` };
 }
 
 /** Grant a free batter (or upgrade) from an event followup. */

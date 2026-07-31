@@ -192,9 +192,9 @@ export const EVENTS = [
   },
   {
     id: 'scrimmage', title: 'Spring Training Scrimmage',
-    body: 'A low-stakes intra-squad. Risk the purse on the result.',
+    body: 'A low-stakes intra-squad. Stake gold on tonight — the purse pays after the night settles.',
     choices: [
-      { label: 'Bet 4g — win 8 or lose 4', effect: { type: 'riskGold', n: 4 } },
+      { label: 'Bet 4g on tonight — collect 8g if you win', effect: { type: 'riskGold', n: 4 } },
       { label: 'Sit it out (+2g)', effect: { type: 'gainGold', n: 2 } },
     ],
   },
