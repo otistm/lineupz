@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "LINEUP — build the sequence, break the pitcher.",
+  "description": "LINEUPZ — build the sequence, break the pitcher.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

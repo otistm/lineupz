@@ -238,4 +238,8 @@ export const LINK_COLOR = {
   TABLESET:  [1.00, 0.72, 0.30],
   ATTRITION: [0.62, 0.40, 0.24],
   IGNITE:    [0.38, 0.87, 0.62],
+  CLEANUP:   [0.95, 0.45, 0.55],
+  SHUTDOWN:  [0.55, 0.55, 0.70],
+  WALKOFF:   [0.45, 0.78, 0.95],
+  LONG_AB:   [0.70, 0.65, 0.40],
 };

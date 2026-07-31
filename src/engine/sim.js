@@ -29,8 +29,12 @@ export const ARCH_INFO = {
     ability: '+3 STAM DMG once the pitcher is Gassed or Broken.' },
   RALLY:   { label: 'Rally',   role: '+1 HIT & STAM DMG per runner on',
     ability: '+1 HIT and +1 STAM DMG for each runner already on base.' },
+  CLOSER:  { label: 'Closer',  role: '+2 HIT & STAM DMG with 2 outs',
+    ability: 'With 2 outs: +2 HIT and +2 STAM DMG — finish the frame.' },
+  PATIENT: { label: 'Patient', role: 'First look +2 HIT; outs wear 1',
+    ability: 'First look vs the pitcher: +2 HIT. Outs still deal 1 STAM DMG.' },
 };
-export const OUT_DAMAGE = { GRINDER: 2 };
+export const OUT_DAMAGE = { GRINDER: 2, PATIENT: 1 };
 
 /* ---------- fatigue: emptying the tank unlocks the lineup ---------- */
 export const STATE_INFO = {
@@ -58,11 +62,21 @@ export const LOOKS = [
 ];
 export const lookAt = (seen) => LOOKS[Math.min(seen, LOOKS.length - 1)];
 
+/** Sum charm numeric effects. */
+export function sumCharmEffect(charms, key) {
+  let n = 0;
+  for (const c of charms || []) n += c.effect?.[key] || 0;
+  return n;
+}
+
 /** The pitch a bat has to beat — shown on the stamina bar as the red PITCH badge. */
-export function stuffAgainst(pitcher, state, seen = 0) {
-  const fade = STATE_INFO[state].stuff * (pitcher.stubborn || 1);
+export function stuffAgainst(pitcher, state, seen = 0, charms = []) {
+  const fadeMul = pitcher.fadeHard && state !== 'FRESH' ? pitcher.fadeHard : 1;
+  const fade = STATE_INFO[state].stuff * (pitcher.stubborn || 1) * fadeMul;
   const edge = pitcher.freshEdge && state === 'FRESH' ? pitcher.freshEdge : 0;
-  return Math.max(0, Math.round(pitcher.stuff + fade + edge + lookAt(seen).stuff));
+  const intimidate = pitcher.intimidate && state === 'FRESH' ? pitcher.intimidate : 0;
+  const charmDelta = seen === 0 ? sumCharmEffect(charms, 'firstLookStuff') : 0;
+  return Math.max(0, Math.round(pitcher.stuff + fade + edge + intimidate + lookAt(seen).stuff + charmDelta));
 }
 
 /* ---------- the order ---------- */
@@ -87,6 +101,10 @@ export const LINK_TYPES = {
   TABLESET:  { label: 'Table set', gives: 'sets the table for the slugger',    short: 'sets table', HIT: 3 },
   ATTRITION: { label: 'Attrition', gives: 'both grinders wear the pitcher harder', short: 'wear harder', OUT: 1, both: true },
   IGNITE:    { label: 'Ignition',  gives: 'lights the rally man',              short: 'lights rally', POW: 2 },
+  CLEANUP:   { label: 'Cleanup',   gives: 'slugger sets up the closer',        short: 'cleanup', POW: 2 },
+  SHUTDOWN:  { label: 'Shutdown',  gives: 'closer feeds the grinder',          short: 'shutdown', OUT: 1 },
+  WALKOFF:   { label: 'Walk-off',  gives: 'patient lights the spark',          short: 'walk-off', HIT: 2 },
+  LONG_AB:   { label: 'Long AB',   gives: 'both patients wear the pitcher',    short: 'long AB', OUT: 1, both: true },
 };
 
 export function computeLinks(lineup) {
@@ -100,20 +118,26 @@ export function computeLinks(lineup) {
     if (a.arch === 'GRINDER' && b.arch === 'GRINDER') links.push({ from: i, to: j, type: 'ATTRITION' });
     if (a.arch === 'SPARK' && b.arch === 'SLUGGER') links.push({ from: i, to: j, type: 'TABLESET' });
     if (a.arch === 'SPARK' && b.arch === 'RALLY') links.push({ from: i, to: j, type: 'IGNITE' });
+    if (a.arch === 'SLUGGER' && b.arch === 'CLOSER') links.push({ from: i, to: j, type: 'CLEANUP' });
+    if (a.arch === 'CLOSER' && b.arch === 'GRINDER') links.push({ from: i, to: j, type: 'SHUTDOWN' });
+    if (a.arch === 'PATIENT' && b.arch === 'SPARK') links.push({ from: i, to: j, type: 'WALKOFF' });
+    if (a.arch === 'PATIENT' && b.arch === 'PATIENT') links.push({ from: i, to: j, type: 'LONG_AB' });
   }
   return links;
 }
 
-/** Effective HIT / POW / OUT per slot: card + zone + gear + links. Pitcher-free. */
-export function boardSetup(lineup, gearMap) {
+/** Effective HIT / POW / OUT per slot: card + zone + gear + links + charms. Pitcher-free. */
+export function boardSetup(lineup, gearMap, charms = []) {
   const links = computeLinks(lineup);
+  const charmHit = sumCharmEffect(charms, 'allHit');
+  const charmOut = sumCharmEffect(charms, 'allOut');
   const eff = lineup.map((p, slot) => {
     if (!p) return null;
     const z = zoneOf(slot);
     const e = {
-      HIT: p.HIT + z.HIT,
+      HIT: p.HIT + z.HIT + charmHit,
       POW: p.POW + z.POW,
-      OUT: (OUT_DAMAGE[p.arch] || 0) + z.OUT,
+      OUT: (OUT_DAMAGE[p.arch] || 0) + z.OUT + charmOut,
       arch: p.arch, id: p.id, n: p.n, set: p.set, zone: z.key,
     };
     for (const g of gearMap[p.id] || []) for (const k in g.mods) e[k] += g.mods[k];
@@ -133,7 +157,7 @@ export function boardSetup(lineup, gearMap) {
 }
 
 /* ---------- live modifiers, shared by the sim and the card readout ----------
-   ctx: { runners, state }. Returned in the order they should be shown. */
+   ctx: { runners, state, outs, seen, charms }. Returned in the order they should be shown. */
 export function modifiersFor(e, state, ctx) {
   const mods = [];
   const on = Math.min(3, ctx.runners || 0);
@@ -142,6 +166,19 @@ export function modifiersFor(e, state, ctx) {
   }
   if (e.arch === 'SLUGGER' && (state === 'GASSED' || state === 'BROKEN')) {
     mods.push({ key: 'SLUGGER', label: '+3 STAM DMG', detail: `pitcher is ${STATE_INFO[state].label}`, HIT: 0, POW: 3 });
+  }
+  if (e.arch === 'CLOSER' && (ctx.outs || 0) >= 2) {
+    mods.push({ key: 'CLOSER', label: '+2 HIT & STAM DMG', detail: '2 outs', HIT: 2, POW: 2 });
+  }
+  if (e.arch === 'PATIENT' && (ctx.seen || 0) === 0) {
+    mods.push({ key: 'PATIENT', label: '+2 HIT', detail: 'first look', HIT: 2, POW: 0 });
+  }
+  const laborPow = sumCharmEffect(ctx.charms, 'laboringPow');
+  if (laborPow > 0 && state !== 'FRESH') {
+    mods.push({
+      key: 'RALLYCAP', label: `+${laborPow} STAM DMG`, detail: 'Rally Cap',
+      HIT: 0, POW: laborPow,
+    });
   }
   return mods;
 }
@@ -155,7 +192,11 @@ export function resolvePA(e, stuff, ctx, _rng) {
   const pow = e.POW + sumMods(mods, 'POW');
 
   if (!beatsWall(hit, stuff)) {
-    return { type: 'OUT', reached: false, bases: 0, damage: ctx.noOutDamage ? 0 : e.OUT || 0, hit, pow, wall: stuff };
+    let damage = ctx.noOutDamage ? 0 : e.OUT || 0;
+    if (damage > 0 && ctx.outDamageScale != null) {
+      damage = Math.floor(damage * ctx.outDamageScale);
+    }
+    return { type: 'OUT', reached: false, bases: 0, damage, hit, pow, wall: stuff };
   }
 
   let type = '1B', bases = 1, stretch = false;
@@ -187,8 +228,8 @@ export function advanceRunners(bases, r, batter, _rng) {
 /* ---------- a whole night: three innings, order and stamina carry over ---------- */
 export const INNING_CAP = 11; // mercy cap on plate appearances in one inning
 
-export function simNight(lineup, gearMap, pitcher, rng) {
-  const { eff } = boardSetup(lineup, gearMap);
+export function simNight(lineup, gearMap, pitcher, rng, charms = []) {
+  const { eff } = boardSetup(lineup, gearMap, charms);
   const order = battingOrder(lineup);
   let stamina = pitcher.pool, pos = 0, runs = 0, faced = 0;
   const looks = Array(9).fill(0);
@@ -205,8 +246,16 @@ export function simNight(lineup, gearMap, pitcher, rng) {
       pos++; faced++; innFaced++;
       const seen = looks[slot]++;
       const state = stateOf(stamina, pitcher.pool);
-      const stuff = stuffAgainst(pitcher, state, seen);
-      const ctx = { runners: bases.filter(Boolean).length, state, noOutDamage: pitcher.efficient };
+      const stuff = stuffAgainst(pitcher, state, seen, charms);
+      const ctx = {
+        runners: bases.filter(Boolean).length,
+        state,
+        outs,
+        seen,
+        charms,
+        noOutDamage: pitcher.efficient,
+        outDamageScale: pitcher.halfOuts ? 0.5 : undefined,
+      };
       const r = resolvePA(e, stuff, ctx, rng);
       stamina = Math.max(0, stamina - r.damage);
       if (!r.reached) outs++;

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="LINEUP — build the sequence, break the pitcher.">
-<title>LINEUP</title>
+<meta name="description" content="LINEUPZ — build the sequence, break the pitcher.">
+<title>LINEUPZ</title>
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,21 +15,18 @@
 
 <div class="wrap">
 
-  <!-- ============ how a night works (dismissible) ============ -->
-  <div class="rules" id="rules">
-    <button type="button" class="rules-toggle" id="rules-toggle" aria-expanded="true">How a night works</button>
-    <div class="rules-body" id="rules-body">
-      <div class="rule"><span class="num">1</span><span class="txt"><b>Draft, then sponsor.</b> Drag batters from the draft into your order (one card per career lineage). Pick <b>one of three sponsors</b> for gear. Then PLAY BALL.</span></div>
-      <div class="rule"><span class="num">2</span><span class="txt"><b>Career cards.</b> Same player can show up as Rookie → Topps → All-Star → World Series. Buying a higher set <b>upgrades</b> the card you already own. Neighbours link — the glowing ropes feed the next bat.</span></div>
-      <div class="rule"><span class="num">3</span><span class="txt"><b>Empty the pitcher's stamina.</b> Fresh → Laboring → Gassed → BROKEN. Each pitcher has a <b>gimmick</b>. Empty seats are skipped, never outs — but a short order means the pitcher keeps seeing the same bats.</span></div>
-      <div class="rule"><span class="num">4</span><span class="txt">Win or lose, you return to the draft, then a new sponsor trio, then the dugout. Fail a night and lose a <b>life</b>. Zero lives ends the run.</span></div>
-      <button type="button" class="rules-gotit" id="rules-gotit">Got it</button>
+  <!-- ============ how it works + wallet ============ -->
+  <div class="top-row" id="top-row">
+    <div class="rules" id="rules">
+      <button type="button" class="rules-toggle" id="rules-toggle" aria-expanded="true">How a night works</button>
+      <div class="rules-body" id="rules-body">
+        <div class="rule"><span class="num">1</span><span class="txt"><b>Walk the hex path.</b> Hover a stop to read it. Travel only to hexes touching yours — draft, sponsors, gold, or an encounter — then face tonight's pitcher.</span></div>
+        <div class="rule"><span class="num">2</span><span class="txt"><b>Career cards & charms.</b> Same player upgrades Rookie → Topps → All-Star → World Series. Charms are run-wide passives. Neighbours link — the glowing ropes feed the next bat.</span></div>
+        <div class="rule"><span class="num">3</span><span class="txt"><b>Empty the pitcher's stamina.</b> Fresh → Laboring → Gassed → BROKEN. Beat an arm to <b>unlock the next</b> and keep the same run going with a new map.</span></div>
+        <div class="rule"><span class="num">4</span><span class="txt">Fail a night and lose a <b>life</b> — you return to the map before that boss. The run ends only at <b>zero lives</b>.</span></div>
+        <button type="button" class="rules-gotit" id="rules-gotit">Got it</button>
+      </div>
     </div>
-  </div>
-
-  <!-- ============ phase strip + wallet ============ -->
-  <div class="run-bar">
-    <div class="ladder" id="ladder" aria-label="Run phases"></div>
     <div class="wallet" id="wallet">
       <div class="wallet-cell">
         <span class="wallet-lbl"><span class="gold-ico" aria-hidden="true"></span> Gold</span>
@@ -41,10 +38,11 @@
 
   <!-- ============ opponent ============ -->
   <div class="topbar">
-    <div class="opp">
+    <div class="opp" id="opp">
       <div>
         <div class="opp-eyebrow" id="opp-eyebrow">Tonight's opponent</div>
         <div class="opp-name" id="opp-name">—</div>
+        <div class="opp-team" id="opp-team">—</div>
         <div class="stam">
           <div class="stam-head">
             <span class="stam-lbl">Pitcher's stamina <b id="stam-num">—</b></span>
@@ -68,8 +66,34 @@
     </div>
   </div>
 
+  <!-- ============ title / meta ============ -->
+  <div class="title-screen" id="title-screen">
+    <div class="title-brand">LINEUPZ</div>
+    <p class="title-tag">Build the sequence. Break the pitcher.</p>
+    <div class="title-ladder" id="title-ladder"></div>
+    <p class="title-next" id="title-next"></p>
+    <button type="button" class="act go" id="new-run">NEW RUN</button>
+  </div>
+
+  <!-- ============ path map (hex island) ============ -->
+  <div class="path-map hidden" id="path-map">
+    <div class="chalk-h"><span id="map-title">Path to —</span><b id="map-gold-live"></b></div>
+    <div class="hex-stage" id="hex-stage">
+      <div class="hex-field" id="hex-field"></div>
+      <div class="hex-peek" id="hex-peek" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- ============ encounter ============ -->
+  <div class="event-panel hidden" id="event-panel">
+    <div class="chalk-h"><span id="event-title">Encounter</span><b id="event-gold-live"></b></div>
+    <p class="event-body" id="event-body"></p>
+    <div class="event-choices" id="event-choices"></div>
+    <div class="event-followup hidden" id="event-followup"></div>
+  </div>
+
   <!-- ============ draft / sponsors market ============ -->
-  <div class="market" id="market">
+  <div class="market hidden" id="market">
     <div class="draft" id="draft">
       <div class="chalk-h"><span>Player draft</span><b id="draft-gold-live"></b></div>
       <div class="shop-row draft-row" id="draft-row"></div>
@@ -182,6 +206,10 @@
     <div>
       <div class="chalk-h"><span>Your roster</span><b id="bench-count">0</b></div>
       <div class="chips" id="bench-tray"></div>
+    </div>
+    <div>
+      <div class="chalk-h"><span>Charms</span><b id="charm-count">0</b></div>
+      <div class="chips" id="charm-tray"></div>
     </div>
     <div class="actions">
       <button class="act" id="play">PLAY BALL</button>

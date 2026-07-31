@@ -30,7 +30,15 @@ import {
   isUpgrade,
   ownedByLineage,
 } from '../src/engine/shop.js';
-import { HITTERS, GEAR, PITCHERS, LADDER, ECONOMY, SETS, SPONSORS } from '../src/data/catalog.js';
+import {
+  HITTERS, GEAR, CHARMS, PITCHERS, TEAMS, LADDER, ECONOMY, SETS, SPONSORS,
+  EVENTS, UNLOCK_ORDER, START_UNLOCKED, buildLadder, LADDER_DEFS,
+} from '../src/data/catalog.js';
+import {
+  generateRunMap, appendAct, assertActReachable, startActNav, advanceNav, retryBossNav, goldForNode,
+} from '../src/engine/map.js';
+import { applyEventEffect, claimFreeBatter } from '../src/engine/events.js';
+import { ARCH_INFO } from '../src/engine/sim.js';
 
 function mulberry32(seed) {
   return function () {
@@ -71,6 +79,7 @@ const night = (lineup, gearMap, pid) => simNight(lineup, gearMap, P(pid), rng0);
   const fresh = stuffAgainst(k, 'FRESH', 0), gassed = stuffAgainst(k, 'GASSED', 0);
   check('his STUFF falls as the tank empties', gassed <= fresh - 4, `fresh ${fresh} → gassed ${gassed}`);
   check("Koufax's Fresh edge is on his card", fresh === k.stuff + k.freshEdge);
+  check("Moyer paces himself between innings", P('longman').recover === 3);
   check('a second look hands him +1 STUFF', stuffAgainst(k, 'GASSED', 1) - gassed === lookAt(1).stuff);
   const p = P('pedro00');
   check('Pedro fades slower than Koufax',
@@ -112,6 +121,18 @@ const night = (lineup, gearMap, pid) => simNight(lineup, gearMap, P(pid), rng0);
 
   const a = advanceRunners([{ arch: 'SPARK' }, null, { arch: 'RALLY' }], { bases: 4, type: 'HR', reached: true }, { arch: 'SLUGGER' }, rng0);
   check('home run scores everyone + batter', a.runs === 3 && a.bases.every((x) => x === null));
+
+  const closer = { HIT: 4, POW: 5, OUT: 0, arch: 'CLOSER' };
+  check('closer only fires with 2 outs',
+    modifiersFor(closer, 'FRESH', { outs: 1 }).length === 0 &&
+    modifiersFor(closer, 'FRESH', { outs: 2 })[0].HIT === 2 &&
+    modifiersFor(closer, 'FRESH', { outs: 2 })[0].POW === 2);
+  const patient = { HIT: 5, POW: 2, OUT: 1, arch: 'PATIENT' };
+  check('patient first-look HIT bonus',
+    modifiersFor(patient, 'FRESH', { seen: 0 })[0].HIT === 2 &&
+    modifiersFor(patient, 'FRESH', { seen: 1 }).length === 0);
+  const pOut = resolvePA(patient, 20, { runners: 0, state: 'FRESH', seen: 1 }, rng0);
+  check('patient outs wear 1 (from OUT on bat)', !pOut.reached && pOut.damage === 1);
 }
 
 /* ---------- lineup position ---------- */
@@ -144,6 +165,13 @@ check('state thresholds ordered', stateOf(100, 100) === 'FRESH' && stateOf(50, 1
   check('spark→slugger lights Table set', links.some((l) => l.type === 'TABLESET'), `${links.length} links`);
   check('a link covers the weakness of the bat it feeds', eff[1].HIT >= H('ruth27').HIT + 3,
     `Ruth HIT ${H('ruth27').HIT} → ${eff[1].HIT}`);
+
+  const newLinks = [H('ruth27'), H('ortiz04'), H('morgan76'), H('boggs87'), H('gwynn94'), null, null, null, null];
+  const nl = computeLinks(newLinks);
+  check('slugger→closer lights Cleanup', nl.some((l) => l.type === 'CLEANUP'));
+  check('closer→grinder lights Shutdown', nl.some((l) => l.type === 'SHUTDOWN'));
+  check('patient→spark lights Walk-off', nl.some((l) => l.type === 'WALKOFF'));
+  check('ARCH_INFO covers every hitter arch', HITTERS.every((h) => ARCH_INFO[h.arch]));
 }
 
 /* ---------- draft / sponsors / career cards ---------- */
@@ -153,6 +181,7 @@ check('state thresholds ordered', stateOf(100, 100) === 'FRESH' && stateOf(50, 1
   check('gear only speaks in HIT, POW and OUT',
     GEAR.every((g) => g.cost > 0 && Object.keys(g.mods).every((k) => ['HIT', 'POW', 'OUT'].includes(k))));
   check('every pitcher has a gimmick note and a tank', PITCHERS.every((p) => p.pool > 0 && p.note && p.tip));
+  check('every pitcher has a known team', PITCHERS.every((p) => p.team && TEAMS[p.team]));
   check('three sponsors', SPONSORS.length === 3);
   check('empty start + thin open', ECONOMY.startGold >= 10 && ECONOMY.startLives === 4 && ECONOMY.minSeated === 1);
   check('draft slots', ECONOMY.draftSlots === 6);
@@ -233,6 +262,65 @@ const FUNDED_GEAR = {
   const b = night(SEQ_BAD, {}, 'koufax65');
   check('sequence is the lever — same bats, different night', g.runs > b.runs && g.broke && !b.broke,
     `good order ${g.runs} runs (${g.finalState}) vs bad order ${b.runs} (${b.finalState})`);
+}
+
+/* ---------- map / events / charms / unlocks ---------- */
+{
+  check('unlock order starts with opener + surgeon',
+    UNLOCK_ORDER[0] === 'longman' && UNLOCK_ORDER[1] === 'maddux95' && START_UNLOCKED === 2);
+  check('buildLadder respects unlock list', buildLadder(['longman', 'maddux95']).length === 2);
+  check('full LADDER has every unlock arm', LADDER.length === UNLOCK_ORDER.length
+    && LADDER.every((r, i) => r.pitcher === UNLOCK_ORDER[i]));
+  check('every unlock has a ladder def', UNLOCK_ORDER.every((id) => LADDER_DEFS[id]));
+  check('new pitchers have gimmicks',
+    P('unit95')?.intimidate === 3 && P('ryan73')?.pool >= 70 && P('mo99')?.halfOuts === true);
+
+  const map = generateRunMap(3, 42);
+  check('map has one act per ladder rung', map.acts.length === 3);
+  check('every act is fully reachable', map.acts.every(assertActReachable));
+  const act0 = map.acts[0];
+  check('act ends in a boss', act0.layers.at(-1)[0].kind === 'boss');
+  check('hex island has multiple stops', (act0.all?.length || 0) >= 6);
+  check('act has a draft somewhere before the boss',
+    act0.layers.slice(0, -1).flat().some((n) => n.kind === 'draft'));
+  let nav = startActNav(act0);
+  check('act opens with sandlot (leg 0) choices', nav.available.length === act0.layers[0].length);
+  const first = nav.available[0];
+  nav = advanceNav(act0, nav, first);
+  check('completing a hex opens touching hexes ahead', nav.available.length >= 1 && nav.visited.includes(first) && nav.here === first);
+  const retry = retryBossNav(act0);
+  const bossApproaches = act0.all.filter((n) => n.edges.includes(act0.bossId)).map((n) => n.id);
+  check('loss reopens hexes touching the boss',
+    retry.available.length === bossApproaches.length
+    && bossApproaches.every((id) => retry.available.includes(id)));
+  check('node gold scales with rung', goldForNode(0) === 4 && goldForNode(2) === 6);
+  const grown = generateRunMap(2, 99);
+  appendAct(grown, 2);
+  check('appendAct extends a run map', grown.acts.length === 3 && assertActReachable(grown.acts[2]));
+
+  check('charms catalog is non-empty', CHARMS.length >= 6);
+  const tape = CHARMS.find((c) => c.id === 'tape');
+  const { eff: charmEff } = boardSetup([H('ozzie87'), null, null, null, null, null, null, null, null], {}, [tape]);
+  check('Tape Job charm adds HIT', charmEff[0].HIT === H('ozzie87').HIT + 1 + 1); // zone TOP +1, tape +1
+  const scout = CHARMS.find((c) => c.id === 'scout');
+  const wall0 = stuffAgainst(P('longman'), 'FRESH', 0, [scout]);
+  const wall1 = stuffAgainst(P('longman'), 'FRESH', 0, []);
+  check('Scouting Report lowers first-look pitch', wall0 === wall1 - 1);
+
+  const half = resolvePA({ HIT: 0, POW: 0, OUT: 4, arch: 'GRINDER' }, 20,
+    { runners: 0, state: 'FRESH', outDamageScale: 0.5 }, rng0);
+  check('Rivera half-outs floors damage', half.damage === 2);
+
+  check('events catalog has choices', EVENTS.length >= 8 && EVENTS.every((e) => e.choices?.length >= 2));
+  const bag = {
+    gold: 10, owned: [], loose: [], charms: [], gearMap: {}, lineup: Array(9).fill(null), rung: 0,
+  };
+  const gained = applyEventEffect(bag, { type: 'gainGold', n: 5 }, mulberry32(1));
+  check('event gainGold pays out', gained.state.gold === 15);
+  const draftFu = applyEventEffect(bag, { type: 'draftOne' }, mulberry32(2));
+  check('event draftOne opens a free pick', draftFu.followup?.type === 'draftOne' && draftFu.followup.offers.length >= 1);
+  const free = claimFreeBatter(bag, draftFu.followup.offers[0].id);
+  check('free batter claim adds to roster', free.ok && free.state.owned.length === 1);
 }
 
 if (failed) {

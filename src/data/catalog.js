@@ -92,6 +92,22 @@ export const HITTERS = [
   { id: 'jeter96-rc',  lineage: 'jeter',  set: 'ROOKIE',       n: 'Derek Jeter',      y: 1996, team: 'Yankees',   arch: 'SPARK',   HIT: 5, POW: 2, cap: 2, cost: 3 },
   { id: 'jeter98-as',  lineage: 'jeter',  set: 'ALL_STAR',     n: 'Derek Jeter',      y: 1998, team: 'Yankees',   arch: 'SPARK',   HIT: 7, POW: 3, cap: 2, cost: 8 },
   { id: 'jeter00-ws',  lineage: 'jeter',  set: 'WORLD_SERIES', n: 'Derek Jeter',      y: 2000, team: 'Yankees',   arch: 'SPARK',   HIT: 8, POW: 4, cap: 2, cost: 12 },
+  // David Ortiz — Closer (finishes frames)
+  { id: 'ortiz97-rc',  lineage: 'ortiz',  set: 'ROOKIE',       n: 'David Ortiz',      y: 1997, team: 'Twins',     arch: 'CLOSER',  HIT: 3, POW: 4, cap: 2, cost: 3 },
+  { id: 'ortiz04',     lineage: 'ortiz',  set: 'BASE',         n: 'David Ortiz',      y: 2004, team: 'Red Sox',   arch: 'CLOSER',  HIT: 4, POW: 7, cap: 2, cost: 6 },
+  { id: 'ortiz04-ws',  lineage: 'ortiz',  set: 'WORLD_SERIES', n: 'David Ortiz',      y: 2004, team: 'Red Sox',   arch: 'CLOSER',  HIT: 5, POW: 9, cap: 2, cost: 11 },
+  // Kirk Gibson — Closer
+  { id: 'gibson80-rc', lineage: 'kgibson', set: 'ROOKIE',      n: 'Kirk Gibson',      y: 1980, team: 'Tigers',    arch: 'CLOSER',  HIT: 3, POW: 4, cap: 2, cost: 2 },
+  { id: 'gibson88',    lineage: 'kgibson', set: 'BASE',        n: 'Kirk Gibson',      y: 1988, team: 'Dodgers',   arch: 'CLOSER',  HIT: 4, POW: 6, cap: 2, cost: 5 },
+  { id: 'gibson88-ws', lineage: 'kgibson', set: 'WORLD_SERIES', n: 'Kirk Gibson',     y: 1988, team: 'Dodgers',   arch: 'CLOSER',  HIT: 5, POW: 8, cap: 2, cost: 10 },
+  // Wade Boggs — Patient
+  { id: 'boggs82-rc',  lineage: 'boggs',  set: 'ROOKIE',       n: 'Wade Boggs',       y: 1982, team: 'Red Sox',   arch: 'PATIENT', HIT: 5, POW: 2, cap: 2, cost: 3 },
+  { id: 'boggs87',     lineage: 'boggs',  set: 'BASE',         n: 'Wade Boggs',       y: 1987, team: 'Red Sox',   arch: 'PATIENT', HIT: 7, POW: 2, cap: 2, cost: 6 },
+  { id: 'boggs96-as',  lineage: 'boggs',  set: 'ALL_STAR',     n: 'Wade Boggs',       y: 1996, team: 'Yankees',   arch: 'PATIENT', HIT: 8, POW: 3, cap: 2, cost: 9 },
+  // Joey Votto — Patient
+  { id: 'votto07-rc',  lineage: 'votto',  set: 'ROOKIE',       n: 'Joey Votto',       y: 2007, team: 'Reds',      arch: 'PATIENT', HIT: 4, POW: 3, cap: 2, cost: 3 },
+  { id: 'votto10',     lineage: 'votto',  set: 'BASE',         n: 'Joey Votto',       y: 2010, team: 'Reds',      arch: 'PATIENT', HIT: 6, POW: 5, cap: 2, cost: 7 },
+  { id: 'votto10-as',  lineage: 'votto',  set: 'ALL_STAR',     n: 'Joey Votto',       y: 2010, team: 'Reds',      arch: 'PATIENT', HIT: 7, POW: 6, cap: 2, cost: 11 },
 ];
 
 /* Gear — sold only by sponsors. OUT = the bat's outs cost the pitcher that much stamina. */
@@ -123,39 +139,190 @@ export const ECONOMY = {
   sellRate: 0.6,
   winGold: (rung) => 8 + rung,
   lossGold: 3,
+  nodeGold: (rung) => 4 + rung,
   minSeated: 1,
   draftSlots: 6,
+  eventDraftSlots: 3,
   sponsorOfferSlots: 4,
   /** Paying for a higher set of a lineage you own: new cost minus half the old card's cost. */
   upgradeDiscount: 0.5,
 };
 
-/* Pitchers are gimmick bosses. */
-export const PITCHERS = [
-  { id: 'longman',  n: 'Jamie Moyer',    y: 1996, stuff: 4, pool: 28,
-    note: 'Soft opener — learn the draft, then the sequence.',
-    tip: 'Seat what you can afford, light a link, and score one.' },
-  { id: 'maddux95', n: 'Greg Maddux',    y: 1995, stuff: 6, pool: 42, efficient: true,
-    note: 'Outs never cost this pitcher stamina. You have to put the ball in play.',
-    tip: 'Lean on Sparks and Sluggers — Grinders who only wear the pitcher with outs do nothing.' },
-  { id: 'koufax65', n: 'Sandy Koufax',   y: 1965, stuff: 5, pool: 46, freshEdge: 2,
-    note: 'Untouchable while Fresh. Beat that first pitch or you never get going.',
-    tip: 'Grinders and early wear — empty the tank before the middle of the order.' },
-  { id: 'gibson68', n: 'Bob Gibson',     y: 1968, stuff: 6, pool: 42, recover: 7,
-    note: 'This pitcher catches his breath between innings. Short innings let him reset.',
-    tip: 'Build long rallies — Sparks into Rally men, keep the inning alive.' },
-  { id: 'pedro00',  n: 'Pedro Martínez', y: 2000, stuff: 7, pool: 58, stubborn: 0.5,
-    note: 'Deepest tank, and this pitcher fades slowest. Every link has to work.',
-    tip: 'Fill the order, sequence your links, and stack Sluggers for when the pitcher cracks.' },
+/** Run-wide passives — not seat-equipped. */
+export const CHARMS = [
+  { id: 'coffee',   n: 'Clubhouse Coffee', cost: 4, blurb: '+2g whenever you win a night.',
+    effect: { goldOnWin: 2 } },
+  { id: 'scout',    n: 'Scouting Report',  cost: 5, blurb: 'First look vs any bat: pitch −1.',
+    effect: { firstLookStuff: -1 } },
+  { id: 'rosin',    n: 'Pine Rosin',       cost: 4, blurb: 'Every bat: outs cost the pitcher +1.',
+    effect: { allOut: 1 } },
+  { id: 'tape',     n: 'Tape Job',         cost: 4, blurb: 'Every bat: +1 HIT.',
+    effect: { allHit: 1 } },
+  { id: 'rallycap', n: 'Rally Cap',        cost: 5, blurb: 'Once the pitcher is Laboring+: every bat +1 STAM DMG.',
+    effect: { laboringPow: 1 } },
+  { id: 'waiver',   n: 'Waiver Wire',      cost: 3, blurb: '+2g consolation after a loss.',
+    effect: { lossGoldBonus: 2 } },
 ];
 
-export const LADDER = [
-  { pitcher: 'longman',  target: 1, name: 'Opening Night', blurb: 'Draft your bats, pick a sponsor, then build the order.' },
-  { pitcher: 'maddux95', target: 2, name: 'The Surgeon',   blurb: 'Outs are free for this pitcher — put the ball in play.' },
-  { pitcher: 'koufax65', target: 2, name: 'The Fastball',  blurb: 'A brutal pitch while Fresh — wear the pitcher down early.' },
-  { pitcher: 'gibson68', target: 2, name: 'The Bulldog',   blurb: 'Recovers between innings — keep rallies going.' },
-  { pitcher: 'pedro00',  target: 3, name: 'The Wall',      blurb: 'Deep tank, slow fade — every link has to fire.' },
+/** Path-map encounter scripts. Effects resolved in engine/events.js. */
+export const EVENTS = [
+  {
+    id: 'booster', title: 'Booster Box',
+    body: 'A sealed pack under the dugout bench. Tear it open?',
+    choices: [
+      { label: 'Rip it — free draft pick', effect: { type: 'draftOne' } },
+      { label: 'Flip it for cash', effect: { type: 'gainGold', n: 5 } },
+    ],
+  },
+  {
+    id: 'tipjar', title: 'Clubhouse Tip Jar',
+    body: 'The veterans pass a jar. Pitch in, or shake it out?',
+    choices: [
+      { label: 'Shake it out (+4g)', effect: { type: 'gainGold', n: 4 } },
+      { label: 'Kick in 2g for a charm', effect: { type: 'payForCharm', n: 2 } },
+    ],
+  },
+  {
+    id: 'autograph', title: 'Autograph Line',
+    body: 'Fans want ink. Sign for tips, or grab a free bat from the queue.',
+    choices: [
+      { label: 'Sign for tips (+3g)', effect: { type: 'gainGold', n: 3 } },
+      { label: 'Claim a free gear piece', effect: { type: 'gearOne' } },
+    ],
+  },
+  {
+    id: 'scrimmage', title: 'Spring Training Scrimmage',
+    body: 'A low-stakes intra-squad. Risk the purse on the result.',
+    choices: [
+      { label: 'Bet 4g — win 8 or lose 4', effect: { type: 'riskGold', n: 4 } },
+      { label: 'Sit it out (+2g)', effect: { type: 'gainGold', n: 2 } },
+    ],
+  },
+  {
+    id: 'buyback', title: 'Card Shop Buyback',
+    body: 'The shop will take a career card off your hands at full sticker.',
+    choices: [
+      { label: 'Sell one card (full value)', effect: { type: 'removeCard' } },
+      { label: 'Walk away (+1g)', effect: { type: 'gainGold', n: 1 } },
+    ],
+  },
+  {
+    id: 'rain', title: 'Rain Delay',
+    body: 'The tarp is out. The clubhouse snack cart is open.',
+    choices: [
+      { label: 'Raid the cart (+6g)', effect: { type: 'gainGold', n: 6 } },
+      { label: 'Nap through it', effect: { type: 'gainGold', n: 2 } },
+    ],
+  },
+  {
+    id: 'notebook', title: "Scout's Notebook",
+    body: 'A dog-eared book of tells. Take a charm from the pages.',
+    choices: [
+      { label: 'Keep a random charm', effect: { type: 'gainCharm' } },
+      { label: 'Sell the notes (+4g)', effect: { type: 'gainGold', n: 4 } },
+    ],
+  },
+  {
+    id: 'fanmail', title: 'Fan Mail',
+    body: 'Three cards arrived overnight. Pick one for free.',
+    choices: [
+      { label: 'Open the mail', effect: { type: 'draftOne' } },
+      { label: 'Return to sender (+3g)', effect: { type: 'gainGold', n: 3 } },
+    ],
+  },
 ];
+
+export const NODE_LABELS = {
+  draft: {
+    label: 'Draft', short: 'Bats', color: '#F2EDE0',
+    blurb: 'Six career cards on the table. Buy, upgrade, or reroll — then move on.',
+  },
+  sponsors: {
+    label: 'Sponsors', short: 'Gear', color: '#78B7FF',
+    blurb: 'Three shops. Pick one sponsor and kit out a bat with gear.',
+  },
+  gold: {
+    label: 'Purse', short: 'Gold', color: '#FFB347',
+    blurb: 'Gate receipts. Take the gold and keep walking.',
+  },
+  event: {
+    label: 'Encounter', short: 'Event', color: '#B08DE6',
+    blurb: 'Something happens on the road. A choice, a tip jar, a free card.',
+  },
+  boss: {
+    label: 'Tonight', short: 'Boss', color: '#E8503A',
+    blurb: 'Warm up in the dugout, then face tonight\'s pitcher.',
+  },
+};
+
+/** Club colors for the opponent panel — primary / secondary / accent. */
+export const TEAMS = {
+  mariners:  { n: 'Mariners',  primary: '#0C2C56', secondary: '#005C5C', accent: '#C4CED4' },
+  braves:    { n: 'Braves',    primary: '#132448', secondary: '#CE1141', accent: '#EAAA00' },
+  dodgers:   { n: 'Dodgers',   primary: '#005A9C', secondary: '#A1A1A4', accent: '#FFFFFF' },
+  cardinals: { n: 'Cardinals', primary: '#0C2340', secondary: '#C41E3A', accent: '#FEDB00' },
+  redsox:    { n: 'Red Sox',   primary: '#0C2340', secondary: '#BD3039', accent: '#FFFFFF' },
+  angels:    { n: 'Angels',    primary: '#003263', secondary: '#BA0021', accent: '#C4CED4' },
+  yankees:   { n: 'Yankees',   primary: '#0C2340', secondary: '#C4CED4', accent: '#FFFFFF' },
+};
+
+/* Pitchers are gimmick bosses. */
+export const PITCHERS = [
+  { id: 'longman',  n: 'Jamie Moyer',    y: 1996, team: 'mariners', stuff: 4, pool: 28, recover: 3,
+    note: 'Paces himself — recovers a little stamina between innings.',
+    tip: 'Keep the inning alive — short frames let him catch his breath.' },
+  { id: 'maddux95', n: 'Greg Maddux',    y: 1995, team: 'braves', stuff: 6, pool: 42, efficient: true,
+    note: 'Outs never cost this pitcher stamina. You have to put the ball in play.',
+    tip: 'Lean on Sparks and Sluggers — Grinders who only wear the pitcher with outs do nothing.' },
+  { id: 'koufax65', n: 'Sandy Koufax',   y: 1965, team: 'dodgers', stuff: 5, pool: 46, freshEdge: 2,
+    note: 'Untouchable while Fresh. Beat that first pitch or you never get going.',
+    tip: 'Grinders and early wear — empty the tank before the middle of the order.' },
+  { id: 'gibson68', n: 'Bob Gibson',     y: 1968, team: 'cardinals', stuff: 6, pool: 42, recover: 7,
+    note: 'This pitcher catches his breath between innings. Short innings let him reset.',
+    tip: 'Build long rallies — Sparks into Rally men, keep the inning alive.' },
+  { id: 'pedro00',  n: 'Pedro Martínez', y: 2000, team: 'redsox', stuff: 7, pool: 58, stubborn: 0.5,
+    note: 'Deepest tank, and this pitcher fades slowest. Every link has to work.',
+    tip: 'Fill the order, sequence your links, and stack Sluggers for when the pitcher cracks.' },
+  { id: 'unit95',   n: 'Randy Johnson',  y: 1995, team: 'mariners', stuff: 6, pool: 50, intimidate: 3, fadeHard: 1.5,
+    note: 'Terrifying while Fresh (+3 pitch). Once Laboring, the fade hits harder.',
+    tip: 'Survive the first looks — Patients and wear — then cash Sluggers when he tilts.' },
+  { id: 'ryan73',   n: 'Nolan Ryan',     y: 1973, team: 'angels', stuff: 8, pool: 70,
+    note: 'Raw heat and a bottomless tank. No tricks — just a wall of stuff.',
+    tip: 'Fill every seat, stack HIT, and grind the pool down over long innings.' },
+  { id: 'mo99',     n: 'Mariano Rivera', y: 1999, team: 'yankees', stuff: 7, pool: 52, stubborn: 0.75, halfOuts: true,
+    note: 'The cutter. Outs only deal half STAM DMG. Fades slowly.',
+    tip: 'Put the ball in play — half-wear outs will not empty this tank.' },
+];
+
+/** Night metadata keyed by pitcher id. */
+export const LADDER_DEFS = {
+  longman:  { pitcher: 'longman',  target: 1, name: 'Opening Night', blurb: 'Walk the path, draft bats, then break the soft opener.' },
+  maddux95: { pitcher: 'maddux95', target: 2, name: 'The Surgeon',   blurb: 'Outs are free for this pitcher — put the ball in play.' },
+  koufax65: { pitcher: 'koufax65', target: 2, name: 'The Fastball',  blurb: 'A brutal pitch while Fresh — wear the pitcher down early.' },
+  gibson68: { pitcher: 'gibson68', target: 2, name: 'The Bulldog',   blurb: 'Recovers between innings — keep rallies going.' },
+  pedro00:  { pitcher: 'pedro00',  target: 3, name: 'The Wall',      blurb: 'Deep tank, slow fade — every link has to fire.' },
+  unit95:   { pitcher: 'unit95',   target: 3, name: 'The Unit',      blurb: 'Intimidating Fresh edge — survive, then feast on the fade.' },
+  ryan73:   { pitcher: 'ryan73',   target: 3, name: 'The Express',   blurb: 'Huge pool, raw stuff — fill the order and grind.' },
+  mo99:     { pitcher: 'mo99',     target: 3, name: 'The Sandman',   blurb: 'Half-wear outs and a slow fade — contact is king.' },
+};
+
+/** Meta unlock order. Fresh profiles start with the first START_UNLOCKED arms. */
+export const UNLOCK_ORDER = [
+  'longman', 'maddux95', 'koufax65', 'gibson68', 'pedro00', 'unit95', 'ryan73', 'mo99',
+];
+export const START_UNLOCKED = 2;
+
+/** Build a run ladder from unlocked pitcher ids (order preserved from UNLOCK_ORDER). */
+export function buildLadder(unlockedIds) {
+  const set = new Set(unlockedIds);
+  return UNLOCK_ORDER.filter((id) => set.has(id)).map((id) => ({ ...LADDER_DEFS[id] }));
+}
+
+/** Full catalog ladder (all arms) — balance scripts and QA. */
+export const LADDER = buildLadder(UNLOCK_ORDER);
+
+/** Extend set weights for longer ladders — clamp to last band. */
+export const SET_WEIGHTS_SAFE = SET_WEIGHTS;
 
 /** @deprecated use SET_WEIGHTS — kept for any leftover imports */
 export const TIER_WEIGHTS = SET_WEIGHTS.map((w) => ({

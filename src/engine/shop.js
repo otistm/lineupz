@@ -1,6 +1,6 @@
 /* Pure shop helpers — Node + browser. No DOM. */
 import {
-  HITTERS, GEAR, ECONOMY, SETS, SET_WEIGHTS, SPONSORS,
+  HITTERS, GEAR, CHARMS, ECONOMY, SETS, SET_WEIGHTS, SPONSORS,
 } from '../data/catalog.js';
 
 export function sellPrice(item) {
@@ -171,4 +171,12 @@ export function seatedCount(lineup) {
 
 export function canPlay(lineup) {
   return seatedCount(lineup) >= ECONOMY.minSeated;
+}
+
+export function charmById(id) {
+  return CHARMS.find((c) => c.id === id) || null;
+}
+
+export function sellCharmPrice(charm) {
+  return sellPrice(charm);
 }

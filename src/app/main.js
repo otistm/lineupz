@@ -1,4 +1,7 @@
-import { HITTERS, GEAR, PITCHERS, LADDER, ECONOMY, SETS } from '../data/catalog.js';
+import {
+  HITTERS, GEAR, CHARMS, PITCHERS, TEAMS, ECONOMY, SETS, NODE_LABELS, EVENTS, LADDER_DEFS,
+  UNLOCK_ORDER, buildLadder,
+} from '../data/catalog.js';
 import {
   ARCH_INFO,
   STATE_INFO,
@@ -14,6 +17,7 @@ import {
   stateOf,
   resolvePA,
   advanceRunners,
+  sumCharmEffect,
 } from '../engine/sim.js';
 import {
   generateDraft,
@@ -25,6 +29,16 @@ import {
   isUpgrade,
   ownedByLineage,
 } from '../engine/shop.js';
+import {
+  generateRunMap, appendAct, startActNav, advanceNav, retryBossNav, nodeById, goldForNode,
+  allNodes, HEX, hexPath, hexWall,
+} from '../engine/map.js';
+import {
+  applyEventEffect, claimFreeBatter, removeOwnedCard,
+} from '../engine/events.js';
+import {
+  loadMeta, ladderForRun, nextUnlockTease, unlockAfterBeat, nextPitcherAfter,
+} from './meta.js';
 import { createLinkField, LINK_COLOR } from './linkfield.js';
 import { createField } from './field.js';
 
@@ -55,6 +69,8 @@ function tellFor(r, info) {
   } else {
     if (r.stretch) bits.push('stretches it');
     else if (info.mods?.some((m) => m.key === 'SLUGGER')) bits.push('+3 STAM DMG');
+    else if (info.mods?.some((m) => m.key === 'CLOSER')) bits.push('2 outs');
+    else if (info.mods?.some((m) => m.key === 'PATIENT')) bits.push('first look');
     else if (info.mods?.some((m) => m.key === 'RALLY')) bits.push('runners on');
     else if (r.type === 'HR') bits.push('clears the yard');
     else if (r.type === '2B') bits.push('hard contact');
@@ -83,8 +99,11 @@ function clearTell(card) {
 }
 
 /* =================== state =================== */
-const byId = (id) => HITTERS.find((h) => h.id === id) || GEAR.find((g) => g.id === id);
-const pitcherOf = (rung) => PITCHERS.find((p) => p.id === LADDER[rung].pitcher);
+const byId = (id) => HITTERS.find((h) => h.id === id)
+  || GEAR.find((g) => g.id === id)
+  || CHARMS.find((c) => c.id === id);
+const ladder = () => S.ladder || [];
+const pitcherOf = (rung) => PITCHERS.find((p) => p.id === ladder()[rung]?.pitcher);
 
 function setLabel(set) {
   return SETS[set]?.short || set || '';
@@ -101,25 +120,34 @@ function refreshSponsors() {
   S.chosenSponsor = null;
 }
 
-function freshRun() {
+function freshRun(meta = loadMeta()) {
+  const runLadder = ladderForRun(meta);
+  const seed = (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+  const map = generateRunMap(runLadder.length, seed);
   const S0 = {
     lineup: Array(9).fill(null),
     gearMap: {},
     loose: [],
     owned: [],
+    charms: [],
     draft: [],
     sponsors: [],
     chosenSponsor: null,
     gold: ECONOMY.startGold,
     lives: ECONOMY.startLives,
     rung: 0,
-    // draft → sponsors → dugout → playing → won|lost|champion|dead
-    phase: 'draft',
+    ladder: runLadder,
+    runSeed: seed,
+    map,
+    mapNav: startActNav(map.acts[0]),
+    event: null,
+    eventFollowup: null,
+    // title → map → draft|sponsors|event → dugout → playing → won|lost|champion|dead
+    phase: 'title',
     playing: false,
     dealt: false,
     lastSnap: null,
   };
-  S0.draft = generateDraft(0, []);
   return S0;
 }
 let S = freshRun();
@@ -321,7 +349,7 @@ function syncLinkField() {
   if (!linkField.ok) return;
   const board = $('#board'), canvas = $('#linkfx');
   if (!board || !canvas) return;
-  const { links } = boardSetup(S.lineup, S.gearMap);
+  const { links } = boardSetup(S.lineup, S.gearMap, S.charms);
   canvas.style.height = `${board.offsetHeight + WRAP_STRIP}px`;
   linkField.resize();
 
@@ -521,6 +549,42 @@ function rerollDraft() {
   renderWallet(); renderMarket();
 }
 
+function enterTitlePhase() {
+  S = freshRun();
+  S.phase = 'title';
+  $('#verdict').className = 'verdict';
+  clearResults();
+  $('#summary').textContent = '';
+  updatePlayButton();
+  renderAll();
+}
+
+function startNewRun() {
+  S = freshRun();
+  S.phase = 'map';
+  S.mapNav = startActNav(S.map.acts[0]);
+  $('#verdict').className = 'verdict';
+  clearResults();
+  $('#summary').textContent = '';
+  audio.bell();
+  updatePlayButton();
+  renderAll();
+}
+
+function enterMapPhase({ clearVerdict = true } = {}) {
+  S.phase = 'map';
+  S.event = null;
+  S.eventFollowup = null;
+  S.chosenSponsor = null;
+  if (clearVerdict) {
+    $('#verdict').className = 'verdict';
+    clearResults();
+    $('#summary').textContent = '';
+  }
+  updatePlayButton();
+  renderAll();
+}
+
 function enterDraftPhase() {
   S.phase = 'draft';
   S.chosenSponsor = null;
@@ -539,12 +603,63 @@ function enterSponsorsPhase() {
   renderAll();
 }
 
+function enterEventPhase(eventId) {
+  const ev = EVENTS.find((e) => e.id === eventId) || EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  S.phase = 'event';
+  S.event = ev;
+  S.eventFollowup = null;
+  updatePlayButton();
+  renderAll();
+}
+
 function enterDugoutPhase() {
   S.phase = 'dugout';
   S.dealt = false;
   clearResults(); // zeros scoreboard / bases; stamina full; Warming up via render
   updatePlayButton();
   renderAll();
+}
+
+function finishMapNode(nodeId) {
+  const act = S.map.acts[S.rung];
+  S.mapNav = advanceNav(act, S.mapNav, nodeId);
+  enterMapPhase();
+}
+
+function selectMapNode(nodeId) {
+  const act = S.map.acts[S.rung];
+  const node = nodeById(act, nodeId);
+  if (!node || !S.mapNav.available.includes(nodeId)) { audio.reject(); return; }
+  S.mapNav = { ...S.mapNav, current: nodeId };
+  if (node.kind === 'draft') {
+    enterDraftPhase();
+    audio.bell();
+    return;
+  }
+  if (node.kind === 'sponsors') {
+    enterSponsorsPhase();
+    audio.bell();
+    return;
+  }
+  if (node.kind === 'gold') {
+    const pay = goldForNode(S.rung);
+    S.gold += pay;
+    audio.coin();
+    finishMapNode(nodeId);
+    return;
+  }
+  if (node.kind === 'event') {
+    const pool = EVENTS;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    enterEventPhase(pick.id);
+    audio.bell();
+    return;
+  }
+  if (node.kind === 'boss') {
+    // Stay on this node until the night resolves.
+    enterDugoutPhase();
+    audio.bell();
+  }
 }
 
 /* =================== render =================== */
@@ -570,20 +685,119 @@ function renderWallet() {
   $('#lives').classList.toggle('low', S.lives <= 1);
 }
 
+/** Which swap-panel is on stage for this phase (map ↔ draft/sponsors/event). */
+function stagePanelKey(phase = S.phase) {
+  if (phase === 'map') return 'map';
+  if (phase === 'draft' || phase === 'sponsors') return 'market';
+  if (phase === 'event') return 'event';
+  return null;
+}
+
+function stagePanelEl(key) {
+  if (key === 'map') return $('#path-map');
+  if (key === 'market') return $('#market');
+  if (key === 'event') return $('#event-panel');
+  return null;
+}
+
+let activeStageKey = null;
+let stageTransit = 0;
+const STAGE_MS = 380;
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+}
+
+function snapStagePanel(key) {
+  stageTransit += 1;
+  for (const k of ['map', 'market', 'event']) {
+    const el = stagePanelEl(k);
+    if (!el) continue;
+    el.classList.remove('is-exit', 'is-enter');
+    el.classList.toggle('hidden', k !== key);
+  }
+  activeStageKey = key;
+}
+
+function revealStagePanel(el) {
+  if (!el) return;
+  el.classList.remove('hidden', 'is-exit');
+  if (prefersReducedMotion()) {
+    el.classList.remove('is-enter');
+    return;
+  }
+  el.classList.add('is-enter');
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => el.classList.remove('is-enter'));
+  });
+}
+
+/** Fade map ↔ location panels instead of hard-cutting display. */
+function syncStagePanels(nextKey) {
+  if (nextKey === activeStageKey) {
+    // Same panel (e.g. still market) — ensure it's visible after a cancelled transit.
+    const el = stagePanelEl(nextKey);
+    if (el && el.classList.contains('hidden') && !el.classList.contains('is-exit')) {
+      el.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const prevKey = activeStageKey;
+  const prev = stagePanelEl(prevKey);
+  const next = stagePanelEl(nextKey);
+
+  if (prefersReducedMotion() || !prev || prev.classList.contains('hidden')) {
+    snapStagePanel(nextKey);
+    if (next) revealStagePanel(next);
+    return;
+  }
+
+  const token = ++stageTransit;
+  activeStageKey = nextKey;
+  prev.classList.add('is-exit');
+  prev.classList.remove('is-enter');
+
+  const finish = () => {
+    if (token !== stageTransit) return;
+    prev.classList.add('hidden');
+    prev.classList.remove('is-exit');
+    // Hide any other stage panels that aren't the target.
+    for (const k of ['map', 'market', 'event']) {
+      if (k === nextKey || k === prevKey) continue;
+      const other = stagePanelEl(k);
+      other?.classList.add('hidden');
+      other?.classList.remove('is-exit', 'is-enter');
+    }
+    revealStagePanel(next);
+  };
+
+  const onEnd = (e) => {
+    if (e.target !== prev || (e.propertyName && e.propertyName !== 'opacity')) return;
+    prev.removeEventListener('transitionend', onEnd);
+    clearTimeout(failSafe);
+    finish();
+  };
+  prev.addEventListener('transitionend', onEnd);
+  const failSafe = setTimeout(() => {
+    prev.removeEventListener('transitionend', onEnd);
+    finish();
+  }, STAGE_MS);
+}
+
 function renderPhaseChrome() {
   document.body.dataset.phase = S.phase;
-  const market = $('#market');
   const draft = $('#draft');
   const sponsors = $('#sponsors');
-  const board = $('#board-wrap');
   const dugout = $('#dugout');
-  const showMarket = S.phase === 'draft' || S.phase === 'sponsors';
-  market?.classList.toggle('hidden', !showMarket);
+  const title = $('#title-screen');
   draft?.classList.toggle('hidden', S.phase !== 'draft');
   sponsors?.classList.toggle('hidden', S.phase !== 'sponsors');
+  title?.classList.toggle('hidden', S.phase !== 'title');
+  syncStagePanels(stagePanelKey(S.phase));
   // Board stays live while shopping: draft cards drop into the order and
   // sponsor gear drops straight onto a batter.
-  board?.classList.remove('locked');
+  $('#board-wrap')?.classList.remove('locked');
   // The field only takes the stage for the night itself.
   const sb = $('#scoreboard');
   const live = S.playing || ['playing', 'won', 'lost'].includes(S.phase);
@@ -595,9 +809,14 @@ function renderPhaseChrome() {
   dugout?.classList.toggle('assemble', S.phase === 'dugout');
   // Setup chrome leaves the stage for the night: rack/roster, how-it-works, phases.
   const nightOn = S.playing || ['playing', 'won', 'lost', 'champion', 'dead'].includes(S.phase);
-  dugout?.classList.toggle('hidden', nightOn);
-  $('#rules')?.classList.toggle('hidden', nightOn);
-  document.querySelector('.run-bar')?.classList.toggle('hidden', nightOn);
+  // Keep dugout visible on map/event so roster/charms stay in view; hide only on title/night.
+  if (S.phase === 'map' || S.phase === 'event' || S.phase === 'draft' || S.phase === 'sponsors' || S.phase === 'dugout') {
+    dugout?.classList.remove('hidden');
+  }
+  if (S.phase === 'title' || nightOn) dugout?.classList.add('hidden');
+  document.querySelector('.top-row')?.classList.toggle('hidden', S.phase === 'title' || nightOn);
+  document.querySelector('.topbar')?.classList.toggle('hidden', S.phase === 'title');
+  $('#board-wrap')?.classList.toggle('hidden', S.phase === 'title');
 }
 
 /** Lineages the current draft can upgrade — used to pair shop and lineup cards. */
@@ -617,7 +836,7 @@ const UP_CHEV = '<span class="up-chev" aria-hidden="true"></span>';
 const STATE_SEQ = ['FRESH', 'LABORING', 'GASSED', 'BROKEN'];
 function vsArmRow(hit, { effective = false } = {}) {
   const pit = pitcherOf(S.rung);
-  const at = STATE_SEQ.find((st) => beatsWall(hit, stuffAgainst(pit, st, 0)));
+  const at = STATE_SEQ.find((st) => beatsWall(hit, stuffAgainst(pit, st, 0, S.charms)));
   const label = at ? `HIT clears ${STATE_INFO[at].label} pitch` : 'HIT never clears pitch';
   const cls = at === 'FRESH' ? 'ok' : at ? 'mid' : 'no';
   const tip = effective
@@ -683,7 +902,7 @@ function renderSponsors() {
   const hint = $('#sponsor-hint');
   if (hint) {
     hint.textContent = S.chosenSponsor
-      ? 'Buy what you need, then continue to the dugout.'
+      ? 'Buy what you need, then return to the map.'
       : 'Three shops — pick one for gear, or continue without.';
   }
   const trio = $('#sponsor-trio');
@@ -714,44 +933,295 @@ function renderSponsors() {
   }).join('');
 }
 
+function renderTitle() {
+  const meta = loadMeta();
+  const arms = ladderForRun(meta);
+  const el = $('#title-ladder');
+  if (el) {
+    el.innerHTML = arms.map((r) => {
+      const p = PITCHERS.find((x) => x.id === r.pitcher);
+      return `<div class="title-arm">
+        <div class="ta-name">${r.name}</div>
+        <div class="ta-pit">${p?.n || r.pitcher} · ${r.target}+</div>
+      </div>`;
+    }).join('');
+  }
+  const tease = nextUnlockTease(meta);
+  const next = $('#title-next');
+  if (next) {
+    next.textContent = tease
+      ? `Next unlock — beat your last arm to face ${tease.name}: ${tease.pitcher}`
+      : 'Full ladder unlocked. Every arm is in play.';
+  }
+}
+
+function mixHex(a, b, t) {
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+  const ch = (s) => Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t);
+  return `#${(1 << 24 | ch(16) << 16 | ch(8) << 8 | ch(0)).toString(16).slice(1)}`;
+}
+
+function hexTileState(t) {
+  if (S.mapNav?.here === t.id || S.mapNav?.current === t.id) return 'here';
+  if (S.mapNav?.available?.includes(t.id)) return 'open';
+  if (S.mapNav?.visited?.includes(t.id)) return 'visited';
+  return 'locked';
+}
+
+function hexPeekBlurb(t, r) {
+  const meta = NODE_LABELS[t.kind] || { blurb: '' };
+  if (t.kind === 'gold') return `Take +${goldForNode(S.rung)}g and keep walking.`;
+  if (t.kind === 'boss') {
+    const pit = PITCHERS.find((p) => p.id === r?.pitcher);
+    return pit
+      ? `Face ${pit.n}. Score ${r.target}+ runs in three innings.`
+      : meta.blurb;
+  }
+  return meta.blurb;
+}
+
+function showHexPeek(id) {
+  const act = S.map?.acts[S.rung];
+  const t = act && nodeById(act, id);
+  const peek = $('#hex-peek');
+  const stage = $('#hex-stage');
+  if (!t || !peek || !stage) return;
+  const r = ladder()[S.rung];
+  const meta = NODE_LABELS[t.kind] || { label: t.kind, color: '#F2EDE0' };
+  const st = hexTileState(t);
+  const eye = {
+    here: 'You are here',
+    visited: 'Already played',
+  }[st];
+  peek.innerHTML = `${eye ? `<div class="eye">${eye}</div>` : ''}
+    <h3 style="color:${meta.color === '#F2EDE0' ? 'var(--ink)' : meta.color}">${meta.label}</h3>
+    <p>${hexPeekBlurb(t, r)}</p>`;
+  peek.style.boxShadow = `0 4px 0 ${meta.color}, 0 14px 28px rgba(0,0,0,.45)`;
+
+  const face = document.querySelector(`.hex-tile[data-id="${id}"] .face`);
+  if (!face) { peek.classList.add('on'); return; }
+  const wr = stage.getBoundingClientRect();
+  const fr = face.getBoundingClientRect();
+  let x = fr.right - wr.left + 14;
+  if (x + 260 > wr.width - 8) x = fr.left - wr.left - 274;
+  x = Math.max(8, Math.min(x, wr.width - 268));
+  let y = fr.top - wr.top + fr.height / 2 - 48;
+  y = Math.max(8, Math.min(y, wr.height - 100));
+  peek.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  peek.classList.add('on');
+}
+
+function hideHexPeek() {
+  $('#hex-peek')?.classList.remove('on');
+  document.querySelectorAll('.hex-tile.focus').forEach((el) => el.classList.remove('focus'));
+}
+
+function renderMap() {
+  const live = $('#map-gold-live');
+  if (live) live.innerHTML = `<span class="gold-ico"></span>${S.gold}`;
+  const title = $('#map-title');
+  const r = ladder()[S.rung];
+  const pit = r ? PITCHERS.find((p) => p.id === r.pitcher) : null;
+  if (title) title.textContent = pit ? `Path to ${pit.n}` : 'The path';
+
+  const field = $('#hex-field');
+  if (!field || !S.map) return;
+  const act = S.map.acts[S.rung];
+  if (!act) { field.innerHTML = ''; hideHexPeek(); return; }
+
+  const { S: hs, WALL, CW, CH } = HEX;
+  const parts = [`<svg class="hex-map" viewBox="0 0 ${CW} ${CH}" role="application" aria-label="Tonight's path">
+    <defs>
+      <linearGradient id="hex-sheen" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fff" stop-opacity=".14"/>
+        <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="1" stop-color="#17140F" stop-opacity=".08"/>
+      </linearGradient>
+      <radialGradient id="hex-aceglow">
+        <stop offset="0" stop-color="#E8503A" stop-opacity=".4"/>
+        <stop offset="1" stop-color="#E8503A" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="hex-openglow">
+        <stop offset="0" stop-color="#FFB347" stop-opacity=".45"/>
+        <stop offset="1" stop-color="#FFB347" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="hex-soft" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="8"/>
+      </filter>
+      <filter id="hex-shadow" x="-50%" y="-40%" width="200%" height="200%">
+        <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#0A130E" flood-opacity=".55"/>
+      </filter>
+    </defs>`];
+
+  const order = allNodes(act).slice().sort((a, b) => (a.y - a.lift) - (b.y - b.lift) || a.x - b.x);
+  for (const t of order) {
+    const meta = NODE_LABELS[t.kind] || { label: t.kind, color: '#F2EDE0', short: t.kind };
+    const st = hexTileState(t);
+    const isAce = t.kind === 'boss';
+    const cx = t.x, cy = t.y - t.lift;
+    const s = isAce ? hs * 1.08 : hs;
+    const wh = WALL + Math.min(t.lift, 4) + (isAce ? 6 : 0);
+    // Chalk cards when live, turf when locked — same language as lineup .pc / dugout.
+    let face, wall, rim, ink;
+    if (st === 'here' || st === 'open') {
+      face = mixHex('#F2EDE0', meta.color, isAce ? 0.22 : 0.12);
+      wall = '#8C5836';
+      rim = st === 'here' ? '#FFB347' : (isAce ? '#E8503A' : '#17140F');
+      ink = isAce ? '#E8503A' : (meta.color === '#F2EDE0' ? '#17140F' : meta.color);
+    } else if (st === 'visited') {
+      face = mixHex('#1C3B2D', '#5ED89A', 0.18);
+      wall = '#122A20';
+      rim = 'rgba(94,216,154,.55)';
+      ink = 'rgba(242,237,224,.55)';
+    } else {
+      face = mixHex('#122A20', '#1C3B2D', 0.45);
+      wall = '#0A130E';
+      rim = 'rgba(242,237,224,.18)';
+      ink = 'rgba(242,237,224,.28)';
+    }
+
+    parts.push(`<g class="hex-tile ${st}" data-id="${t.id}" data-map-node="${t.id}">`);
+    if (isAce && (st === 'open' || st === 'here')) {
+      parts.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${(s * 1.95).toFixed(0)}" ry="${(s * 1.75).toFixed(0)}" fill="url(#hex-aceglow)"/>`);
+    }
+    if (st === 'open' && !isAce) {
+      parts.push(`<ellipse class="glow" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${(s * 1.55).toFixed(0)}" ry="${(s * 1.4).toFixed(0)}" fill="url(#hex-openglow)" filter="url(#hex-soft)"/>`);
+    }
+    parts.push(`<path d="${hexWall(cx, cy, s, wh)}" fill="${wall}" stroke="#0A130E" stroke-width="1.2"/>`);
+    parts.push(`<path d="${hexPath(cx, cy, s)}" fill="#0A130E" filter="url(#hex-shadow)" opacity=".35"/>`);
+    parts.push(`<path class="face" d="${hexPath(cx, cy, s)}" fill="${face}" stroke="${rim}" stroke-width="${st === 'here' ? 2.6 : st === 'open' ? 2.2 : 1.5}"/>`);
+    if (st === 'open' || st === 'here') {
+      parts.push(`<path d="${hexPath(cx, cy, s)}" fill="url(#hex-sheen)"/>`);
+    }
+    parts.push(`<text class="cap" x="${cx.toFixed(1)}" y="${(cy + (isAce ? 26 : 18)).toFixed(1)}" fill="${ink}">${meta.short || meta.label}</text>`);
+    if (st === 'here') {
+      parts.push(`<circle cx="${cx.toFixed(1)}" cy="${(cy - s * 0.62).toFixed(1)}" r="4.2" fill="#FFB347" stroke="#17140F" stroke-width="1.2"/>`);
+    }
+    parts.push('</g>');
+  }
+
+  parts.push('</svg>');
+  field.innerHTML = parts.join('');
+  hideHexPeek();
+}
+
+function initHexMapEvents() {
+  const field = $('#hex-field');
+  if (!field || field.dataset.bound) return;
+  field.dataset.bound = '1';
+  field.addEventListener('pointerover', (e) => {
+    if (S.phase !== 'map') return;
+    const g = e.target.closest('.hex-tile');
+    if (!g) return;
+    document.querySelectorAll('.hex-tile.focus').forEach((el) => el.classList.remove('focus'));
+    g.classList.add('focus');
+    showHexPeek(g.dataset.id);
+  });
+  field.addEventListener('pointerleave', hideHexPeek);
+}
+
+function renderEvent() {
+  const ev = S.event;
+  const live = $('#event-gold-live');
+  if (live) live.innerHTML = `<span class="gold-ico"></span>${S.gold}`;
+  $('#event-title').textContent = ev?.title || 'Encounter';
+  $('#event-body').textContent = ev?.body || '';
+  const choices = $('#event-choices');
+  const follow = $('#event-followup');
+  if (!choices) return;
+  if (S.eventFollowup) {
+    choices.innerHTML = '';
+    follow?.classList.remove('hidden');
+    renderEventFollowup();
+    return;
+  }
+  follow?.classList.add('hidden');
+  if (follow) follow.innerHTML = '';
+  choices.innerHTML = (ev?.choices || []).map((c, i) =>
+    `<button type="button" class="act" data-event-choice="${i}">${c.label}</button>`).join('');
+}
+
+function renderEventFollowup() {
+  const fu = S.eventFollowup;
+  const host = $('#event-followup');
+  if (!host || !fu) return;
+  if (fu.type === 'draftOne') {
+    host.innerHTML = `<div class="chalk-h"><span>Pick one — free</span></div>
+      <div class="shop-row draft-row" id="event-draft-row"></div>`;
+    const row = $('#event-draft-row');
+    if (!row) return;
+    row.innerHTML = fu.offers.map((o, i) => {
+      const item = byId(o.id);
+      if (!item) return '';
+      return `<button type="button" class="pc draft-pc set-${setCss(item.set)}" data-event-pick="${i}">
+        <div class="pc-head">
+          <span class="set-badge s-${setCss(item.set)}">${setLabel(item.set)}</span>
+          <span class="arch a-${item.arch}">${ARCH_INFO[item.arch].label}</span>
+        </div>
+        <div class="pc-body">
+          <div class="pname">${item.n}</div>
+          <div class="pmeta">${item.y} · ${item.team}</div>
+          <div class="bignums">
+            <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">${item.HIT}</span></div>
+            <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">${item.POW}</span></div>
+          </div>
+          <div class="prole">${ARCH_INFO[item.arch].role}</div>
+          <div class="pc-cost-row afford">FREE</div>
+        </div>
+      </button>`;
+    }).join('');
+    return;
+  }
+  if (fu.type === 'removeCard') {
+    host.innerHTML = `<div class="chalk-h"><span>Sell one card — full sticker</span></div>
+      <div class="event-choices" id="event-remove-row"></div>`;
+    const row = $('#event-remove-row');
+    if (!row) return;
+    row.innerHTML = S.owned.map((id) => {
+      const p = byId(id);
+      if (!p) return '';
+      return `<button type="button" class="act" data-event-remove="${id}">${p.n} · +${p.cost}g</button>`;
+    }).join('') + `<button type="button" class="act ghost" data-event-skip-remove="1">Skip · +1g</button>`;
+  }
+}
+
 function renderMarket() {
   renderPhaseChrome();
-  if (S.phase === 'draft') renderDraft();
+  if (S.phase === 'title') renderTitle();
+  else if (S.phase === 'map') renderMap();
+  else if (S.phase === 'event') renderEvent();
+  else if (S.phase === 'draft') renderDraft();
   else if (S.phase === 'sponsors') renderSponsors();
 }
 
 function updatePlayButton() {
   const btn = $('#play');
-  if (S.phase === 'champion') { btn.disabled = true; btn.textContent = 'RUN COMPLETE'; return; }
+  if (!btn) return;
+  if (S.phase === 'title' || S.phase === 'map' || S.phase === 'event') {
+    btn.disabled = true;
+    btn.textContent = S.phase === 'map' ? 'PICK A NODE' : '…';
+    return;
+  }
   if (S.phase === 'dead') { btn.disabled = true; btn.textContent = 'RUN OVER'; return; }
   if (S.playing || S.phase === 'playing') { btn.disabled = true; btn.textContent = 'IN PLAY…'; return; }
   if (S.phase === 'won' || S.phase === 'lost') { btn.disabled = true; btn.textContent = '…'; return; }
-  // CONTINUE through setup; PLAY BALL only when the dugout is ready.
-  if (S.phase === 'draft') {
-    btn.disabled = S.owned.length < 1;
-    btn.textContent = 'CONTINUE';
-    return;
-  }
-  if (S.phase === 'sponsors') {
+  if (S.phase === 'draft' || S.phase === 'sponsors') {
     btn.disabled = false;
-    btn.textContent = 'CONTINUE';
+    btn.textContent = 'DONE · MAP';
     return;
   }
   const ok = canPlay(S.lineup);
   btn.disabled = !ok;
-  btn.textContent = ok ? 'PLAY BALL' : 'CONTINUE';
+  btn.textContent = ok ? 'PLAY BALL' : 'SEAT A BAT';
 }
 
 function advanceFromPlayButton() {
   if (S.phase === 'draft') {
-    if (S.owned.length < 1) { audio.reject(); return; }
-    enterSponsorsPhase();
-    audio.bell();
+    leaveDraftNode();
     return;
   }
   if (S.phase === 'sponsors') {
-    enterDugoutPhase();
-    audio.bell();
+    leaveSponsorsNode();
     return;
   }
   if (S.phase === 'dugout') {
@@ -761,8 +1231,22 @@ function advanceFromPlayButton() {
   }
 }
 
+function leaveDraftNode() {
+  const nodeId = S.mapNav?.current;
+  if (!nodeId) { enterMapPhase(); return; }
+  audio.bell();
+  finishMapNode(nodeId);
+}
+
+function leaveSponsorsNode() {
+  const nodeId = S.mapNav?.current;
+  if (!nodeId) { enterMapPhase(); return; }
+  audio.bell();
+  finishMapNode(nodeId);
+}
+
 function renderBoard() {
-  const { eff, links } = boardSetup(S.lineup, S.gearMap);
+  const { eff, links } = boardSetup(S.lineup, S.gearMap, S.charms);
   const first = !S.dealt;
   const upLins = upgradeableLineages();
   $('#board').innerHTML = S.lineup.map((p, i) => {
@@ -845,102 +1329,32 @@ function renderScorecard() {
   $('#sc-grid').innerHTML = html;
 }
 
-/** The whole run, in order: draft → sponsors → night, once per rung. */
-function ladderSteps() {
-  const inNight = ['dugout', 'playing', 'won', 'lost', 'champion', 'dead'].includes(S.phase);
-  const steps = [];
-  LADDER.forEach((r, i) => {
-    const p = PITCHERS.find((x) => x.id === r.pitcher);
-    const past = i < S.rung, here = i === S.rung;
-    steps.push({
-      key: `draft-${i}`, kind: 'phase', rn: 'Draft', rp: 'Buy bats',
-      now: here && S.phase === 'draft',
-      done: past || (here && (S.phase === 'sponsors' || inNight)),
-    });
-    steps.push({
-      key: `sponsors-${i}`, kind: 'phase', rn: 'Sponsors', rp: 'Pick gear',
-      now: here && S.phase === 'sponsors',
-      done: past || (here && inNight),
-    });
-    steps.push({
-      key: `arm-${i}`, kind: 'night', rn: `${i + 1}. ${r.name}`, rp: `${p.n} · ${r.target}+`,
-      now: here && inNight,
-      done: past,
-    });
-  });
-  return steps;
-}
-
-/** Keep the step you are on in view without yanking the page around. */
-function centerLadderOnNow() {
-  const bar = $('#ladder');
-  const el = bar?.querySelector('.rung.now');
-  if (!bar || !el) return;
-  const br = bar.getBoundingClientRect(), er = el.getBoundingClientRect();
-  const left = bar.scrollLeft + (er.left - br.left) - (br.width - er.width) / 2;
-  bar.scrollTo({ left: Math.max(0, left), behavior: REDUCED ? 'auto' : 'smooth' });
-}
-
-function renderLadder() {
-  const steps = ladderSteps();
-  $('#ladder').innerHTML = steps.map((step, i) => {
-    const state = step.now ? 'now' : step.done ? 'done' : '';
-    const arrow = i < steps.length - 1
-      ? `<span class="phase-arrow${step.now ? ' pulse' : ''}" aria-hidden="true">›</span>`
-      : '';
-    return `<div class="rung ${step.kind === 'phase' ? 'phase' : 'night'} ${state}" data-phase-step="${step.key}">
-      <div class="rn">${step.rn}</div>
-      <div class="rp">${step.rp}</div>
-    </div>${arrow}`;
-  }).join('');
-  centerLadderOnNow();
-}
-
-/** Drag the phase strip sideways; it is far too long to fit. */
-function initLadderDrag() {
-  const bar = $('#ladder');
-  if (!bar) return;
-  let down = false, moved = false, x0 = 0, scroll0 = 0;
-  bar.addEventListener('pointerdown', (e) => {
-    if (e.button != null && e.button !== 0) return;
-    down = true; moved = false;
-    x0 = e.clientX; scroll0 = bar.scrollLeft;
-  });
-  bar.addEventListener('pointermove', (e) => {
-    if (!down) return;
-    const dx = e.clientX - x0;
-    if (!moved) {
-      if (Math.abs(dx) < 4) return;
-      moved = true;
-      bar.classList.add('dragging-ladder');
-      bar.setPointerCapture?.(e.pointerId);
-    }
-    bar.scrollLeft = scroll0 - dx;
-    e.preventDefault();
-  });
-  const release = () => { down = false; moved = false; bar.classList.remove('dragging-ladder'); };
-  bar.addEventListener('pointerup', release);
-  bar.addEventListener('pointercancel', release);
-  bar.addEventListener('pointerleave', () => { if (!moved) down = false; });
-  // Vertical wheel over a one-line strip should walk it sideways.
-  bar.addEventListener('wheel', (e) => {
-    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    if (bar.scrollWidth <= bar.clientWidth) return;
-    bar.scrollLeft += e.deltaY;
-    e.preventDefault();
-  }, { passive: false });
+function applyOppTeamTheme(teamKey) {
+  const team = TEAMS[teamKey] || TEAMS.yankees;
+  const el = $('#opp');
+  if (!el) return team;
+  el.style.setProperty('--opp-primary', team.primary);
+  el.style.setProperty('--opp-secondary', team.secondary);
+  el.style.setProperty('--opp-accent', team.accent);
+  el.style.setProperty('--opp-glow', `${team.secondary}22`);
+  el.dataset.team = teamKey || '';
+  return team;
 }
 
 function renderOpponent() {
-  const r = LADDER[S.rung], p = pitcherOf(S.rung);
-  $('#opp-eyebrow').textContent = `Tonight — opponent ${S.rung + 1} of ${LADDER.length} · ${r.name}`;
-  $('#opp-name').textContent = `${p.n}${p.y !== '—' ? `, ${p.y}` : ''}`;
+  const r = ladder()[S.rung], p = pitcherOf(S.rung);
+  if (!r || !p) return;
+  const team = applyOppTeamTheme(p.team);
+  $('#opp-eyebrow').textContent = `Tonight — opponent ${S.rung + 1} · ${r.name}`;
+  $('#opp-name').textContent = p.n;
+  const teamEl = $('#opp-team');
+  if (teamEl) teamEl.textContent = `${team.n}${p.y !== '—' ? ` · ${p.y}` : ''}`;
   const sub = $('#opp-sub');
   if (sub) { sub.textContent = ''; sub.hidden = true; }
   $('#target-num').textContent = r.target;
   $('#need').textContent = `${r.target} to win`;
   $('#stam-note').innerHTML = gimmickLine(p);
-  if (S.phase === 'dugout' || S.phase === 'draft' || S.phase === 'sponsors') {
+  if (['dugout', 'draft', 'sponsors', 'map', 'event'].includes(S.phase)) {
     setWarmingUp(p.pool);
   } else if (!S.playing && S.phase !== 'playing') {
     setStamina(p.pool, p.pool);
@@ -983,7 +1397,10 @@ function placeWallBadge(pct) {
   if (badge) badge.style.left = `${Math.max(5, Math.min(95, pct))}%`;
 }
 /** Tonight's Fresh pitch — what the draft shops against. */
-const freshWall = () => stuffAgainst(pitcherOf(S.rung), 'FRESH', 0);
+const freshWall = () => {
+  const p = pitcherOf(S.rung);
+  return p ? stuffAgainst(p, 'FRESH', 0, S.charms) : 0;
+};
 
 /** His tank and state — the only pitcher numbers the player watches. */
 function setStamina(stamina, pool) {
@@ -1073,32 +1490,52 @@ function stamBite(fromEl, amount, { kind = 'pow', freeOut = false } = {}) {
 }
 
 function renderTray() {
-  $('#gear-count').textContent = `${S.loose.length} on the rack`;
-  $('#gear-tray').innerHTML = S.loose.length
-    ? S.loose.map((g) => `<div class="gitem w${g.w}" data-gear="${g.id}" title="${g.n} — ${modLong(g)}">
-        <span class="gi-n">${g.n}</span><span class="gi-v">${modStr(g)}</span>
-        <button type="button" class="sell-btn" data-sell-gear="${g.id}">Sell <span class="gold-ico"></span>${sellPrice(g)}</button>
-      </div>`).join('')
-    : '';
+  const gearCount = $('#gear-count');
+  const gearTray = $('#gear-tray');
+  if (gearCount) gearCount.textContent = `${S.loose.length} on the rack`;
+  if (gearTray) {
+    gearTray.innerHTML = S.loose.length
+      ? S.loose.map((g) => `<div class="gitem w${g.w}" data-gear="${g.id}" title="${g.n} — ${modLong(g)}">
+          <span class="gi-n">${g.n}</span><span class="gi-v">${modStr(g)}</span>
+          <button type="button" class="sell-btn" data-sell-gear="${g.id}">Sell <span class="gold-ico"></span>${sellPrice(g)}</button>
+        </div>`).join('')
+      : '';
+  }
 
   const inLineup = new Set(S.lineup.filter(Boolean).map((p) => p.id));
   const bench = S.owned.map(byId).filter((h) => h && !inLineup.has(h.id));
-  $('#bench-count').textContent = `${bench.length} on roster`;
+  const benchCount = $('#bench-count');
+  const benchTray = $('#bench-tray');
+  if (benchCount) benchCount.textContent = `${bench.length} on roster`;
   const canSellBat = S.owned.length > 1;
   const upLins = upgradeableLineages();
-  $('#bench-tray').innerHTML = bench.length
-    ? bench.map((p) => `<div class="bench${upLins.has(p.lineage) ? ' upgrade' : ''}" data-drag-player="${p.id}">
-        ${upLins.has(p.lineage) ? UP_CHEV : ''}
-        <div class="bn">${p.n}</div>
-        <div class="bs"><span class="set-badge s-${setCss(p.set)}">${setLabel(p.set)}</span> · ${ARCH_INFO[p.arch].label}</div>
-        <div class="bb">${ARCH_INFO[p.arch].role}</div>
-        ${canSellBat ? `<button type="button" class="sell-btn" data-sell-batter="${p.id}">Sell <span class="gold-ico"></span>${sellPrice(p)}</button>` : ''}
-      </div>`).join('')
-    : '';
+  if (benchTray) {
+    benchTray.innerHTML = bench.length
+      ? bench.map((p) => `<div class="bench${upLins.has(p.lineage) ? ' upgrade' : ''}" data-drag-player="${p.id}">
+          ${upLins.has(p.lineage) ? UP_CHEV : ''}
+          <div class="bn">${p.n}</div>
+          <div class="bs"><span class="set-badge s-${setCss(p.set)}">${setLabel(p.set)}</span> · ${ARCH_INFO[p.arch].label}</div>
+          <div class="bb">${ARCH_INFO[p.arch].role}</div>
+          ${canSellBat ? `<button type="button" class="sell-btn" data-sell-batter="${p.id}">Sell <span class="gold-ico"></span>${sellPrice(p)}</button>` : ''}
+        </div>`).join('')
+      : '';
+  }
+
+  const charmCount = $('#charm-count');
+  const charmTray = $('#charm-tray');
+  if (charmCount) charmCount.textContent = `${(S.charms || []).length}`;
+  if (charmTray) {
+    charmTray.innerHTML = (S.charms || []).length
+      ? S.charms.map((c) => `<div class="charm-chip" title="${c.blurb}">
+          <div class="cn">${c.n}</div>
+          <div class="cb">${c.blurb}</div>
+          <button type="button" class="sell-btn" data-sell-charm="${c.id}">Sell <span class="gold-ico"></span>${sellPrice(c)}</button>
+        </div>`).join('')
+      : '<div class="cb" style="opacity:.5">No charms yet</div>';
+  }
 }
 
 function renderAll() {
-  renderLadder();
   renderOpponent();
   renderWallet();
   renderBoard();
@@ -1861,8 +2298,8 @@ async function playRound() {
   $('#verdict').className = 'verdict';
   $('#board').classList.add('playing');
 
-  const rung = LADDER[S.rung], pit = pitcherOf(S.rung);
-  const { eff } = boardSetup(S.lineup, S.gearMap);
+  const rung = ladder()[S.rung], pit = pitcherOf(S.rung);
+  const { eff } = boardSetup(S.lineup, S.gearMap, S.charms);
   const order = battingOrder(S.lineup);
   const rng = Math.random;
   // Re-query each PA — board may re-render; never trust a stale NodeList across innings.
@@ -1904,10 +2341,16 @@ async function playRound() {
         const seen = looks[slot]++;
         const look = lookAt(seen);
         const stateBefore = stateOf(stamina, pit.pool);
-        const stuff = stuffAgainst(pit, stateBefore, seen);
+        const stuff = stuffAgainst(pit, stateBefore, seen, S.charms);
         const runners = bases.filter(Boolean).length;
-        const mods = modifiersFor(e, stateBefore, { runners });
-        const ctx = { runners, state: stateBefore, mods, noOutDamage: pit.efficient };
+        const mods = modifiersFor(e, stateBefore, {
+          runners, outs, seen, charms: S.charms,
+        });
+        const ctx = {
+          runners, state: stateBefore, mods, outs, seen, charms: S.charms,
+          noOutDamage: pit.efficient,
+          outDamageScale: pit.halfOuts ? 0.5 : undefined,
+        };
 
         // Next batter is up: clear every prior stamp / duel so only this AB can leave a mark.
         duelHide();
@@ -2092,8 +2535,9 @@ async function playRound() {
   } catch (err) {
     console.error('playRound failed', err);
     showVerdict('lose', `<div class="v-title">SOMETHING BROKE</div>
-      <div class="v-body">The night stalled mid-play. Try again from the draft.<br><span style="opacity:.7">${String(err?.message || err)}</span></div>
-      <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO DRAFT</button>`);
+      <div class="v-body">The night stalled mid-play. Try again from the map.<br><span style="opacity:.7">${String(err?.message || err)}</span></div>
+      <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO MAP</button>`);
+    S.mapNav = retryBossNav(S.map.acts[S.rung]);
     S.phase = 'lost';
   } finally {
     S.playing = false;
@@ -2108,66 +2552,105 @@ async function playRound() {
   }
 }
 
+/** Grow the run ladder + map when the player clears the current last arm. */
+function extendRunLadder(fromPitcherId) {
+  const { newlyUnlocked, nextId } = unlockAfterBeat(fromPitcherId);
+  const onLadder = new Set(ladder().map((r) => r.pitcher));
+  // Prefer a freshly unlocked arm; else any next catalog arm not yet on this run;
+  // else rematch the arm just beaten so the run never soft-ends.
+  let addId = null;
+  let rematch = false;
+  if (newlyUnlocked && !onLadder.has(newlyUnlocked)) addId = newlyUnlocked;
+  else if (nextId && !onLadder.has(nextId)) addId = nextId;
+  else {
+    const later = nextPitcherAfter(fromPitcherId);
+    if (later && !onLadder.has(later)) addId = later;
+    else {
+      addId = fromPitcherId;
+      rematch = true;
+    }
+  }
+  const def = LADDER_DEFS[addId];
+  if (!def) return { newlyUnlocked, next: null, rematch: false };
+  S.ladder.push({ ...def });
+  appendAct(S.map, S.ladder.length - 1);
+  return { newlyUnlocked, next: S.ladder[S.ladder.length - 1], rematch };
+}
+
 function finishRound(runs, rung, finalState, brokeInning) {
   const won = runs >= rung.target;
+  const pit = pitcherOf(S.rung);
+  const charmWin = sumCharmEffect(S.charms, 'goldOnWin');
+  const charmLoss = sumCharmEffect(S.charms, 'lossGoldBonus');
 
-  if (won && S.rung === LADDER.length - 1) {
-    const pay = ECONOMY.winGold(S.rung);
-    S.gold += pay;
-    S.phase = 'champion';
-    showVerdict('win', `<div class="v-title">YOU WIN THE RUN</div>
-      <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>, and took down all five arms —
-      finishing on <b>${pitcherOf(S.rung).n}</b>${brokeInning ? `, <b>broken in inning ${brokeInning}</b>` : ''}.
-      Final purse: <b>${S.gold}g</b> (+${pay} this night).<br>
-      Reset and draft a different path through the market.</div>`);
-    audio.win(); confetti();
-    renderWallet(); renderLadder(); updatePlayButton();
-    renderPhaseChrome();
-    return;
+  // Complete the boss node on the map whenever the night ends.
+  const bossNodeId = S.mapNav?.current;
+  if (bossNodeId && won) {
+    S.mapNav = advanceNav(S.map.acts[S.rung], S.mapNav, bossNodeId);
   }
 
   if (won) {
-    const pay = ECONOMY.winGold(S.rung);
+    const pay = ECONOMY.winGold(S.rung) + charmWin;
     S.gold += pay;
+
+    let newlyUnlocked = null;
+    // Clearing the last arm on the current ladder unlocks the next pitcher
+    // and appends a fresh map act — the run keeps going until lives hit 0.
+    if (S.rung === ladder().length - 1) {
+      const ext = extendRunLadder(pit.id);
+      newlyUnlocked = ext.newlyUnlocked;
+    } else {
+      ({ newlyUnlocked } = unlockAfterBeat(pit.id));
+    }
+
     S.phase = 'won';
-    const next = LADDER[S.rung + 1];
+    const next = ladder()[S.rung + 1];
     const np = PITCHERS.find((p) => p.id === next.pitcher);
+    const unlockLine = newlyUnlocked
+      ? `<br>Unlocked <b>${LADDER_DEFS[newlyUnlocked]?.name || newlyUnlocked}</b> — a new path is open.`
+      : '';
+    const rematchNote = next.pitcher === pit.id
+      ? ' Full ladder cleared — rematch and keep going until lives run out.'
+      : '';
     showVerdict('win', `<div class="v-title">YOU WIN</div>
       <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>${brokeInning ? ` — and you <b>broke the pitcher</b> in inning ${brokeInning}` : ''}.
-      Earned <span class="v-reward">+${pay}g</span> (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.<br>
-      Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Draft before the next pitcher.'}</div>
-      <button class="act go" id="advance" style="flex:0 0 auto">DRAFT · NEXT ARM</button>`);
+      Earned <span class="v-reward">+${pay}g</span> (now <b>${S.gold}g</b>). Lives: <b>${S.lives}</b>.${unlockLine}<br>
+      Next: <b>${next.name}</b> — ${np.n}. ${np.note || 'Walk the next path.'}${rematchNote}</div>
+      <button class="act go" id="advance" style="flex:0 0 auto">NEXT ACT · MAP</button>`);
     audio.win(); confetti();
     renderWallet(); updatePlayButton();
     return;
   }
 
   S.lives -= 1;
-  S.gold += ECONOMY.lossGold;
+  const lossPay = ECONOMY.lossGold + charmLoss;
+  S.gold += lossPay;
   const excuse = finalState === 'FRESH'
-    ? 'The pitcher never left Fresh — draft wear (Grinders, sponsor gear that makes outs cost the pitcher) or fill more seats.'
+    ? 'The pitcher never left Fresh — draft wear (Grinders, Patients, sponsor gear that makes outs cost the pitcher) or fill more seats.'
     : finalState === 'BROKEN'
-      ? 'You broke the pitcher but could not cash it in — resequence so Sluggers and Rally men feast on the collapse.'
-      : `The pitcher finished ${STATE_INFO[finalState].label} — close. Draft, rebuild, try again.`;
+      ? 'You broke the pitcher but could not cash it in — resequence so Sluggers, Closers, and Rally men feast on the collapse.'
+      : `The pitcher finished ${STATE_INFO[finalState].label} — close. Return to the path and try again.`;
 
   if (S.lives <= 0) {
     S.phase = 'dead';
     showVerdict('lose', `<div class="v-title">THE RUN IS OVER</div>
-      <div class="v-body">You scored <b>${runs}</b> and needed <b>${rung.target}</b> against ${pitcherOf(S.rung).n}.
-      No lives left. You reached opponent <b>${S.rung + 1}</b> of ${LADDER.length}.<br>${excuse}</div>
-      <button class="act go" id="restart" style="flex:0 0 auto">START A NEW RUN</button>`);
+      <div class="v-body">You scored <b>${runs}</b> and needed <b>${rung.target}</b> against ${pit.n}.
+      No lives left — that is the only way a run ends. You made it to opponent <b>${S.rung + 1}</b>.<br>${excuse}</div>
+      <button class="act go" id="restart" style="flex:0 0 auto">BACK TO TITLE</button>`);
     audio.lose();
     renderWallet(); updatePlayButton();
     renderPhaseChrome();
     return;
   }
 
+  // Reopen the pre-boss layer for another crack at the path.
+  S.mapNav = retryBossNav(S.map.acts[S.rung]);
   S.phase = 'lost';
   showVerdict('lose', `<div class="v-title">THE PITCHER HELD YOU</div>
     <div class="v-body">Scored <b>${runs}</b>, needed <b>${rung.target}</b>. Lost a life — <b>${S.lives}</b> left.
-    Consolation <span class="v-reward">+${ECONOMY.lossGold}g</span> (now <b>${S.gold}g</b>).<br>
-    ${excuse} The same pitcher is waiting — draft and try again.</div>
-    <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO DRAFT</button>`);
+    Consolation <span class="v-reward">+${lossPay}g</span> (now <b>${S.gold}g</b>).<br>
+    ${excuse} The same pitcher is waiting — walk the path again.</div>
+    <button class="act go" id="retry-shop" style="flex:0 0 auto">BACK TO MAP</button>`);
   audio.lose();
   renderWallet(); updatePlayButton();
 }
@@ -2188,11 +2671,106 @@ function initRules() {
 }
 
 /* =================== events =================== */
+function applyRunBag(bag) {
+  S.gold = bag.gold;
+  S.owned = bag.owned;
+  S.loose = bag.loose;
+  S.charms = bag.charms;
+  S.gearMap = bag.gearMap;
+  if (bag.lineup) S.lineup = bag.lineup;
+}
+
+function resolveEventChoice(choiceIdx) {
+  if (S.phase !== 'event' || !S.event) return;
+  const choice = S.event.choices[choiceIdx];
+  if (!choice) return;
+  const { state, followup, done } = applyEventEffect({
+    gold: S.gold,
+    owned: S.owned,
+    loose: S.loose,
+    charms: S.charms,
+    gearMap: S.gearMap,
+    lineup: S.lineup,
+    rung: S.rung,
+  }, choice.effect);
+  applyRunBag(state);
+  if (!done) {
+    audio.reject();
+    renderWallet();
+    renderEvent();
+    return;
+  }
+  audio.coin();
+  if (followup) {
+    S.eventFollowup = followup;
+    renderWallet();
+    renderTray();
+    renderEvent();
+    return;
+  }
+  // Finish the event node.
+  const nodeId = S.mapNav?.current;
+  if (nodeId) finishMapNode(nodeId);
+  else enterMapPhase();
+}
+
 document.addEventListener('click', (e) => {
   if (e.target.closest('#rules-gotit')) { setRulesCollapsed(true); return; }
   if (e.target.closest('#rules-toggle')) { setRulesCollapsed(!$('#rules').classList.contains('collapsed')); return; }
 
   if (e.target.closest('#speed')) { cycleSpeed(); return; }
+
+  if (e.target.closest('#new-run')) { startNewRun(); return; }
+
+  const mapNode = e.target.closest('[data-map-node]');
+  if (mapNode) {
+    selectMapNode(mapNode.dataset.mapNode);
+    return;
+  }
+
+  const evChoice = e.target.closest('[data-event-choice]');
+  if (evChoice) {
+    resolveEventChoice(+evChoice.dataset.eventChoice);
+    return;
+  }
+  const evPick = e.target.closest('[data-event-pick]');
+  if (evPick && S.eventFollowup?.type === 'draftOne') {
+    const offer = S.eventFollowup.offers[+evPick.dataset.eventPick];
+    if (!offer) return;
+    const { state, ok } = claimFreeBatter({
+      gold: S.gold, owned: S.owned, loose: S.loose, charms: S.charms,
+      gearMap: S.gearMap, lineup: S.lineup, rung: S.rung,
+    }, offer.id);
+    if (!ok) { audio.reject(); return; }
+    applyRunBag(state);
+    audio.snap();
+    const nodeId = S.mapNav?.current;
+    if (nodeId) finishMapNode(nodeId);
+    else enterMapPhase();
+    return;
+  }
+  const evRemove = e.target.closest('[data-event-remove]');
+  if (evRemove && S.eventFollowup?.type === 'removeCard') {
+    const { state, ok } = removeOwnedCard({
+      gold: S.gold, owned: S.owned, loose: S.loose, charms: S.charms,
+      gearMap: S.gearMap, lineup: S.lineup, rung: S.rung,
+    }, evRemove.dataset.eventRemove);
+    if (!ok) { audio.reject(); return; }
+    applyRunBag(state);
+    audio.coin();
+    const nodeId = S.mapNav?.current;
+    if (nodeId) finishMapNode(nodeId);
+    else enterMapPhase();
+    return;
+  }
+  if (e.target.closest('[data-event-skip-remove]')) {
+    S.gold += 1;
+    audio.coin();
+    const nodeId = S.mapNav?.current;
+    if (nodeId) finishMapNode(nodeId);
+    else enterMapPhase();
+    return;
+  }
 
   if (e.target.closest('#reroll')) { rerollDraft(); return; }
 
@@ -2205,7 +2783,6 @@ document.addEventListener('click', (e) => {
     audio.snap();
     renderMarket();
     updatePlayButton();
-    renderLadder();
     return;
   }
   // Sponsor gear is bought via pointer (click or drag) — avoid double-buy here.
@@ -2214,33 +2791,41 @@ document.addEventListener('click', (e) => {
   if (sellB) { sellBatter(sellB.dataset.sellBatter); return; }
   const sellG = e.target.closest('[data-sell-gear]');
   if (sellG) { sellLooseGear(sellG.dataset.sellGear); return; }
+  const sellC = e.target.closest('[data-sell-charm]');
+  if (sellC) {
+    const id = sellC.dataset.sellCharm;
+    const i = S.charms.findIndex((c) => c.id === id);
+    if (i < 0) return;
+    const [c] = S.charms.splice(i, 1);
+    S.gold += sellPrice(c);
+    audio.coin();
+    renderWallet(); renderTray();
+    return;
+  }
 
   if (e.target.closest('#play')) return advanceFromPlayButton();
 
   if (e.target.closest('#advance')) {
     S.rung++;
-    enterDraftPhase();
+    S.mapNav = startActNav(S.map.acts[S.rung]);
+    enterMapPhase();
     audio.bell();
     return;
   }
   if (e.target.closest('#retry-shop')) {
-    enterDraftPhase();
+    enterMapPhase();
     audio.bell();
     return;
   }
   if (e.target.closest('#restart') || (e.target.closest('#reset') && !S.playing)) {
-    S = freshRun();
-    $('#verdict').className = 'verdict';
-    clearResults();
-    $('#summary').textContent = '';
-    renderAll();
+    enterTitlePhase();
     audio.bell();
   }
 });
 
 initRules();
 initSpeed();
-initLadderDrag();
+initHexMapEvents();
 renderAll();
 renderScorecard();
 theField()?.clear();
@@ -2250,8 +2835,9 @@ scheduleLinkSync();
 window.__lineup = {
   state: () => ({
     gold: S.gold, lives: S.lives, phase: S.phase, playing: S.playing, rung: S.rung,
-    seated: seatedCount(S.lineup), links: boardSetup(S.lineup, S.gearMap).links.length,
-    owned: [...S.owned], chosenSponsor: S.chosenSponsor,
+    seated: seatedCount(S.lineup), links: boardSetup(S.lineup, S.gearMap, S.charms).links.length,
+    owned: [...S.owned], charms: S.charms.map((c) => c.id), chosenSponsor: S.chosenSponsor,
+    ladder: ladder().map((r) => r.pitcher),
     runs: $('#runs')?.textContent, stamina: $('#stam-state')?.textContent,
     summary: $('#summary')?.textContent, verdict: $('#verdict-top')?.textContent?.trim().slice(0, 200),
   }),
@@ -2272,7 +2858,10 @@ window.__lineup = {
   /** Seat a board without playing — for eyeballing links and layout. */
   seat({ seat = 6, gaps = false, ids = null, rung = 0 } = {}) {
     S = freshRun();
-    S.rung = rung;
+    S.ladder = buildLadder(UNLOCK_ORDER);
+    S.map = generateRunMap(S.ladder.length, S.runSeed);
+    S.rung = Math.min(rung, S.ladder.length - 1);
+    S.mapNav = startActNav(S.map.acts[S.rung]);
     S.phase = 'dugout';
     const pool = ids ? ids.map(byId) : HITTERS.filter((h, _, arr) => {
       // one card per lineage for auto-seat
@@ -2291,7 +2880,11 @@ window.__lineup = {
   async quickNight({ seat = 6, gaps = false, ids = null, rung = 0 } = {}) {
     if (S.playing) return { error: 'already playing' };
     S = freshRun();
-    S.rung = rung;
+    S.ladder = buildLadder(UNLOCK_ORDER);
+    S.map = generateRunMap(S.ladder.length, S.runSeed);
+    S.rung = Math.min(rung, S.ladder.length - 1);
+    const boss = S.map.acts[S.rung].layers.at(-1)[0];
+    S.mapNav = { ...startActNav(S.map.acts[S.rung]), current: boss.id, available: [boss.id] };
     S.phase = 'dugout';
     const pool = ids
       ? ids.map(byId)
