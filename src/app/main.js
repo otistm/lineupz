@@ -419,6 +419,37 @@ function draftPhaseOk() {
 function sponsorPhaseOk() {
   return S.phase === 'sponsors' && !S.playing;
 }
+function eventDraftOk() {
+  return S.phase === 'event' && !S.playing && S.eventFollowup?.type === 'draftOne';
+}
+
+/** Claim a free event batter; optional seat mirrors draft drop-into-order. */
+function claimEventPick(pickIdx, { seat = null } = {}) {
+  if (!eventDraftOk()) return false;
+  const offer = S.eventFollowup.offers[pickIdx];
+  if (!offer) return false;
+  const { state, ok, card } = claimFreeBatter({
+    gold: S.gold, owned: S.owned, loose: S.loose, charms: S.charms,
+    gearMap: S.gearMap, lineup: S.lineup, rung: S.rung, pendingBet: S.pendingBet,
+  }, offer.id);
+  if (!ok) { audio.reject(); return false; }
+  applyRunBag(state);
+  const claimed = card || byId(offer.id);
+  if (seat != null && seat >= 0 && seat < 9 && claimed) {
+    const occ = S.lineup[seat];
+    const here = S.lineup.findIndex((x) => x && x.id === claimed.id);
+    if (here >= 0 && here !== seat) S.lineup[here] = occ || null;
+    S.lineup[seat] = claimed;
+  }
+  S.eventFollowup = null;
+  return true;
+}
+
+function finishEventPick() {
+  const nodeId = S.mapNav?.current;
+  if (nodeId) finishMapNode(nodeId);
+  else enterMapPhase();
+}
 
 /** Remap owned/lineup/gear when upgrading a lineage to a higher set. */
 function upgradeCard(oldId, newCard) {
@@ -1235,21 +1266,28 @@ function renderEventFollowup() {
   const host = $('#event-followup');
   if (!host || !fu) return;
   if (fu.type === 'draftOne') {
-    host.innerHTML = `<div class="chalk-h"><span>Pick one — free</span></div>
+    host.innerHTML = `<div class="chalk-h"><span>Pick one — free · drag into the order or roster</span></div>
       <div class="shop-row draft-row" id="event-draft-row"></div>`;
     const row = $('#event-draft-row');
     if (!row) return;
     row.innerHTML = fu.offers.map((o, i) => {
       const item = byId(o.id);
       if (!item) return '';
-      return `<button type="button" class="pc draft-pc set-${setCss(item.set)}" data-event-pick="${i}">
+      const isUp = isUpgrade(item, S.owned);
+      const cls = [
+        'pc', 'draft-pc',
+        isUp ? 'upgrade' : '',
+        `set-${setCss(item.set)}`,
+      ].filter(Boolean).join(' ');
+      return `<div class="${cls}" data-flip="e:${o.uid || o.id}" data-event-pick="${i}">
+        ${isUp ? UP_CHEV : ''}
         <div class="pc-head">
           <span class="set-badge s-${setCss(item.set)}">${setLabel(item.set)}</span>
           ${archTag(item.arch)}
         </div>
         <div class="pc-body">
           <div class="pname">${item.n}</div>
-          <div class="pmeta">${item.y} · ${item.team}</div>
+          <div class="pmeta">${item.y} · ${item.team}${isUp ? ' · Upgrade' : ''}</div>
           <div class="bignums">
             <div class="bignum k-HIT"><span class="bn-lbl">HIT</span><span class="bn-v">${item.HIT}</span></div>
             <div class="bignum k-POW"><span class="bn-lbl">STAM DMG</span><span class="bn-v">${item.POW}</span></div>
@@ -1257,7 +1295,10 @@ function renderEventFollowup() {
           <div class="prole">${ARCH_INFO[item.arch].role}</div>
           <div class="pc-cost-row afford">FREE</div>
         </div>
-      </button>`;
+        <div class="stamp"></div>
+        <div class="tell"></div>
+        <div class="countbar"><i></i></div>
+      </div>`;
     }).join('');
     return;
   }
@@ -1748,12 +1789,13 @@ function paintDropHints(d, x, y) {
   clearDropHints();
   const shopEl = document.getElementById('market');
 
-  if (d.kind === 'draft') {
+  if (d.kind === 'draft' || d.kind === 'eventDraft') {
     document.body.classList.add('dragging-shop');
-    const offer = S.draft[d.draftIdx];
+    const free = d.kind === 'eventDraft';
+    const offer = free ? S.eventFollowup?.offers?.[d.pickIdx] : S.draft[d.draftIdx];
     if (!offer) return;
-    const cost = buyCost(byId(offer.id), S.owned);
-    const afford = Number.isFinite(cost) && S.gold >= cost;
+    const cost = free ? 0 : buyCost(byId(offer.id), S.owned);
+    const afford = free || (Number.isFinite(cost) && S.gold >= cost);
     const c = nearestCardAt(x, y);
     if (c) { c.el.classList.add(afford ? 'dropzone' : 'drop-reject'); return; }
     if (afford && trayZoneAt('bench-tray', x, y)) document.getElementById('bench-tray')?.classList.add('tray-hot');
@@ -1923,6 +1965,22 @@ function applyDraftDrop(d, x, y) {
   return { ok: true, rect: hit.rect, slot: seat, bought: true };
 }
 
+function applyEventDraftDrop(d, x, y) {
+  const offer = S.eventFollowup?.offers?.[d.pickIdx];
+  if (!offer) return { ok: false, rect: d.originRect };
+  const hit = nearestCardAt(x, y);
+  const bench = hit ? null : trayZoneAt('bench-tray', x, y);
+  if (!hit && !bench) return { ok: false, rect: d.originRect };
+  const seat = hit ? +hit.el.dataset.slot : null;
+  if (!claimEventPick(d.pickIdx, { seat })) {
+    return { ok: false, rect: d.originRect };
+  }
+  audio.snap();
+  if (!hit) return { ok: true, rect: bench.rect, eventClaimed: true };
+  dustDrop(hit.el);
+  return { ok: true, rect: hit.rect, slot: seat, eventClaimed: true };
+}
+
 function applySponsorGearDrop(d, x, y) {
   const sp = S.sponsors[d.spIdx];
   const offer = sp?.offers[d.offerIdx];
@@ -2015,6 +2073,12 @@ function applyPlayerDrop(d, x, y) {
   return { ok: true, rect: hit.rect, slot: target };
 }
 function commitAfterSettle(d, result) {
+  // Free event pick already claimed — leave the encounter (don't flash choices).
+  if (result?.eventClaimed) {
+    S.dealt = true;
+    finishEventPick();
+    return;
+  }
   const first = captureFlip(FLIP_SEL);
   // Keep dealt=true so cards don't re-run the deal animation and fight FLIP.
   S.dealt = true;
@@ -2049,7 +2113,8 @@ document.addEventListener('pointerdown', (e) => {
   if (!setupPhaseOk()) return;
 
   const draftEl = e.target.closest('[data-draft]');
-  const spEl = draftEl ? null : e.target.closest('[data-sponsor-offer]');
+  const eventPickEl = draftEl ? null : e.target.closest('[data-event-pick]');
+  const spEl = (draftEl || eventPickEl) ? null : e.target.closest('[data-sponsor-offer]');
   const gearEl = e.target.closest('[data-gear]');
   // Prefer gear over the parent player card when starting on a dirt-strip item.
   const playerEl = gearEl ? null : e.target.closest('[data-drag-player]');
@@ -2057,6 +2122,9 @@ document.addEventListener('pointerdown', (e) => {
   if (draftEl) {
     if (!draftPhaseOk()) return;
     if (!S.draft[+draftEl.dataset.draft]) return;
+  } else if (eventPickEl) {
+    if (!eventDraftOk()) return;
+    if (!S.eventFollowup.offers[+eventPickEl.dataset.eventPick]) return;
   } else if (spEl) {
     if (!sponsorPhaseOk()) return;
     const [si, oi] = spEl.dataset.sponsorOffer.split(':').map(Number);
@@ -2068,12 +2136,15 @@ document.addEventListener('pointerdown', (e) => {
   }
 
   e.preventDefault();
-  const src = draftEl || spEl || gearEl || playerEl;
+  const src = draftEl || eventPickEl || spEl || gearEl || playerEl;
   const rect = src.getBoundingClientRect();
 
   if (draftEl) {
     const idx = +draftEl.dataset.draft;
     drag = { kind: 'draft', draftIdx: idx, id: S.draft[idx].id, el: src };
+  } else if (eventPickEl) {
+    const idx = +eventPickEl.dataset.eventPick;
+    drag = { kind: 'eventDraft', pickIdx: idx, id: S.eventFollowup.offers[idx].id, el: src };
   } else if (spEl) {
     const [si, oi] = spEl.dataset.sponsorOffer.split(':').map(Number);
     drag = { kind: 'sponsorGear', spIdx: si, offerIdx: oi, id: S.sponsors[si].offers[oi].id, el: src };
@@ -2115,14 +2186,18 @@ function finishPointer(e) {
   d.el.classList.remove('drag-armed');
   if (!d.active) {
     endDragCleanup(d);
-    // Click (no drag): buy into roster / rack
+    // Click (no drag): buy into roster / rack, or claim a free event pick.
     if (d.kind === 'draft') buyDraft(d.draftIdx, { fromEl: d.el });
     else if (d.kind === 'sponsorGear') buySponsorGear(d.spIdx, d.offerIdx, { fromEl: d.el });
+    else if (d.kind === 'eventDraft') {
+      if (claimEventPick(d.pickIdx)) { audio.snap(); finishEventPick(); }
+    }
     return;
   }
   clearDropHints();
   let result;
   if (d.kind === 'draft') result = applyDraftDrop(d, d.x, d.y);
+  else if (d.kind === 'eventDraft') result = applyEventDraftDrop(d, d.x, d.y);
   else if (d.kind === 'sponsorGear') result = applySponsorGearDrop(d, d.x, d.y);
   else if (d.kind === 'gear') result = applyGearDrop(d, d.x, d.y);
   else result = applyPlayerDrop(d, d.x, d.y);
@@ -2227,8 +2302,9 @@ function setRally(n) {
 function boostList(slot, e, info) {
   const out = [];
   for (const l of linkRopes) {
-    if (l.to !== slot) continue;
     const t = LINK_TYPES[l.type];
+    const targets = t.both ? [l.from, l.to] : [l.to];
+    if (!targets.includes(slot)) continue;
     const from = S.lineup[l.from];
     out.push({ cls: `b-${l.type}`, text: t.label.toUpperCase(), note: from ? `from ${from.n} · ${t.gives}` : t.gives, link: true });
   }
@@ -2242,6 +2318,72 @@ function boostList(slot, e, info) {
     out.push({ cls: 'b-cold', text: info.look.label.toUpperCase(), note: 'the pitcher has a read on this bat', cold: true });
   }
   return out.slice(0, 4);
+}
+
+/** Format gear mods for the recap: "+1 HIT, +2 STAM DMG". */
+function formatModsObj(mods) {
+  return Object.entries(mods || {})
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${v > 0 ? '+' : ''}${v} ${k === 'POW' ? 'STAM DMG' : k}`)
+    .join(', ');
+}
+
+/**
+ * Full PA detail for the play-by-play: duel math + every synergy / gear /
+ * zone / charm / ability / pitcher read that fed this at-bat.
+ * links: full boardSetup links (not the truncated rope list).
+ */
+function paDetailBits(slot, e, r, info) {
+  const bits = [];
+  const { pit, state, seen, look, mods, damage, stuff, freeOut, links } = info;
+
+  bits.push(`HIT ${r.hit} vs PITCH ${stuff}`);
+
+  const z = zoneOf(slot);
+  if (z && (z.HIT || z.POW || z.OUT)) bits.push(`${z.label} (${z.gives})`);
+
+  for (const l of links || []) {
+    const t = LINK_TYPES[l.type];
+    if (!t) continue;
+    const targets = t.both ? [l.from, l.to] : [l.to];
+    if (!targets.includes(slot)) continue;
+    const partner = S.lineup[l.from === slot ? l.to : l.from];
+    bits.push(`${t.label}${partner ? ` from ${partner.n}` : ''} (${t.short})`);
+  }
+
+  for (const g of S.gearMap[e.id] || []) {
+    const gm = formatModsObj(g.mods);
+    bits.push(gm ? `${g.n} (${gm})` : g.n);
+  }
+
+  for (const c of S.charms) {
+    if (c.effect?.allHit) bits.push(`${c.n} (+${c.effect.allHit} HIT)`);
+    if (c.effect?.allOut) bits.push(`${c.n} (outs +${c.effect.allOut} STAM DMG)`);
+  }
+  if (seen === 0 && !pit?.denyFirstLook) {
+    for (const c of S.charms) {
+      if (c.effect?.firstLookStuff) {
+        const n = c.effect.firstLookStuff;
+        bits.push(`${c.n} (pitch ${n > 0 ? '+' : ''}${n})`);
+      }
+    }
+  }
+
+  for (const m of mods || []) {
+    bits.push(m.detail ? `${m.label} · ${m.detail}` : m.label);
+  }
+
+  bits.push(`pitcher ${STATE_INFO[state]?.label || state}`);
+  if (seen > 0 && look?.label) {
+    bits.push(pit?.lookMul > 1 ? `${look.label} · the Book` : look.label);
+  }
+
+  if (r.stretch) bits.push('stretches it');
+  if (r.softContact) bits.push('soft contact');
+  if (freeOut) bits.push("outs don't cost the pitcher");
+  if (damage > 0) bits.push(`−${damage} STAM`);
+
+  return bits;
 }
 
 async function showBoosts(card, list) {
@@ -2444,7 +2586,7 @@ async function playRound() {
   $('#board').classList.add('playing');
 
   const rung = ladder()[S.rung], pit = pitcherOf(S.rung);
-  const { eff } = boardSetup(S.lineup, S.gearMap, S.charms);
+  const { eff, links: boardLinks } = boardSetup(S.lineup, S.gearMap, S.charms);
   const order = battingOrder(S.lineup);
   const rng = Math.random;
   // Re-query each PA — board may re-render; never trust a stale NodeList across innings.
@@ -2572,6 +2714,10 @@ async function playRound() {
         const cause = tellFor(r, {
           pit, e, state: stateBefore, seen, look, mods, damage: d,
         });
+        const detailBits = paDetailBits(slot, e, r, {
+          pit, state: stateBefore, seen, look, mods, damage: d, stuff,
+          freeOut, links: boardLinks,
+        });
         const R = RESULT[r.type];
         if (stampEl) {
           stampEl.textContent = R.word;
@@ -2629,13 +2775,16 @@ async function playRound() {
           if (chain > 1) audio.rally(chain);
         }
 
+        const titleBits = detailBits.join(' · ');
         markScorecard(f, slot,
-          `<span class="mark m-${R.kind}" title="${p.n} ${R.tell}${cause ? ` — ${cause}` : ''}">${R.word}${scored ? `<span class="rbi">+${scored}</span>` : ''}</span>`);
+          `<span class="mark m-${R.kind}" title="${p.n} ${R.tell}${titleBits ? ` — ${titleBits}` : ''}">${R.word}${scored ? `<span class="rbi">+${scored}</span>` : ''}</span>`);
 
-        const causeNote = cause ? ` <span class="idle">· ${cause}</span>` : '';
+        const detailNote = detailBits.length
+          ? `<span class="ln-boosts">${detailBits.map((b) => `<span class="boost-bit">${b}</span>`).join('')}</span>`
+          : '';
         logLines.push(`<div class="ln ${r.reached ? 'r-hit' : 'r-out'}">
           <span class="who">${p.n}</span>
-          <span class="res"><b>${R.tell}</b>${causeNote}${scored ? ` <span class="scored">· ${scored} run${scored > 1 ? 's' : ''} score</span>` : ''}</span></div>`);
+          <span class="res"><b>${R.tell}</b>${scored ? ` <span class="scored">· ${scored} run${scored > 1 ? 's' : ''} score</span>` : ''}${detailNote}</span></div>`);
 
         // Hold on the result so the stamp / tell / diamond / stamina change can land.
         await hold(r.type === 'HR' ? PACE.hr : r.reached ? PACE.hit : PACE.out);
@@ -2899,22 +3048,7 @@ document.addEventListener('click', (e) => {
     resolveEventChoice(+evChoice.dataset.eventChoice);
     return;
   }
-  const evPick = e.target.closest('[data-event-pick]');
-  if (evPick && S.eventFollowup?.type === 'draftOne') {
-    const offer = S.eventFollowup.offers[+evPick.dataset.eventPick];
-    if (!offer) return;
-    const { state, ok } = claimFreeBatter({
-      gold: S.gold, owned: S.owned, loose: S.loose, charms: S.charms,
-      gearMap: S.gearMap, lineup: S.lineup, rung: S.rung,
-    }, offer.id);
-    if (!ok) { audio.reject(); return; }
-    applyRunBag(state);
-    audio.snap();
-    const nodeId = S.mapNav?.current;
-    if (nodeId) finishMapNode(nodeId);
-    else enterMapPhase();
-    return;
-  }
+  // Free event picks are claimed via the pointer pipeline (click or drag-to-seat).
   const evRemove = e.target.closest('[data-event-remove]');
   if (evRemove && S.eventFollowup?.type === 'removeCard') {
     const { state, ok } = removeOwnedCard({

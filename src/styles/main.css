@@ -322,7 +322,8 @@ body.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97) both}
   min-height:220px}
 /* Draft uses the same .pc baseball cards as the lineup */
 .draft-row .pc.draft-pc{min-height:220px}
-.draft-row .pc.draft-pc[data-draft]{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.draft-row .pc.draft-pc[data-draft],
+.draft-row .pc.draft-pc[data-event-pick]{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 .draft-row .pc.draft-pc.locked{opacity:.42;cursor:default;filter:grayscale(.5);pointer-events:none}
 .draft-row .pc.draft-pc.cant{opacity:.72}
 .draft-row .pc.draft-pc.upgrade{box-shadow:0 5px 0 #0A130E, 0 0 0 2px rgba(94,216,154,.5)}
@@ -476,6 +477,7 @@ body[data-phase="dugout"] .board-wrap{pointer-events:auto;opacity:1;filter:none}
 /* Carrying a card out of the shop: show the seats it can land in. */
 body.dragging-shop .pc.slot-empty{border-color:var(--bulb);background:rgba(255,179,71,.07)}
 body.dragging-shop[data-phase="draft"] #bench-tray,
+body.dragging-shop[data-phase="event"] #bench-tray,
 body.dragging-shop[data-phase="sponsors"] #gear-tray,
 body.dragging-owned #bench-tray{
   outline:2px dashed rgba(255,179,71,.28);outline-offset:6px;border-radius:8px;
@@ -975,6 +977,15 @@ body.dragging-owned #bench-tray{
 .log .r-hit .res b,.pbp-log .r-hit .res b{color:var(--bulb-hot)}
 .log .scored,.pbp-log .scored{color:var(--bulb);font-weight:600}
 .log .idle,.pbp-log .idle{color:var(--chalk-dim);font-style:italic}
+.log .ln-boosts,.pbp-log .ln-boosts{
+  display:flex;flex-wrap:wrap;gap:4px 6px;margin-top:4px;
+}
+.log .boost-bit,.pbp-log .boost-bit{
+  display:inline-block;padding:1px 7px;border-radius:4px;
+  border:1px solid rgba(242,237,224,.14);background:rgba(242,237,224,.06);
+  color:var(--chalk-dim);font-size:10.5px;line-height:1.35;font-style:normal;
+  letter-spacing:.02em;
+}
 .pbp-head-actions{display:inline-flex;align-items:center;gap:10px}
 .pbp-expand{
   border:1.5px solid var(--chalk-dim);background:transparent;color:var(--chalk);
@@ -1016,14 +1027,19 @@ body.dragging-owned #bench-tray{
   padding:16px 22px 22px;overflow-y:auto;font-size:14px;line-height:1.75;color:var(--chalk);
 }
 .pbp-log .inn-div{font-size:11px;letter-spacing:.14em;margin:14px 0 8px;padding-top:10px;color:var(--bulb)}
-.pbp-log .ln{gap:14px;padding:5px 0;border-bottom:1px solid rgba(242,237,224,.06)}
+.pbp-log .ln{gap:14px;padding:8px 0;border-bottom:1px solid rgba(242,237,224,.06);align-items:flex-start}
 .pbp-log .who{
-  flex:0 0 min(34%,220px);overflow:visible;text-overflow:unset;white-space:normal;
+  flex:0 0 min(28%,200px);overflow:visible;text-overflow:unset;white-space:normal;
   font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:1.15rem;
   text-transform:uppercase;color:var(--chalk);line-height:1.15;
 }
 .pbp-log .res{flex:1;min-width:0}
 .pbp-log .idle{font-size:12.5px}
+.pbp-log .ln-boosts{margin-top:6px;gap:5px 7px}
+.pbp-log .boost-bit{
+  font-size:11.5px;padding:2px 8px;
+  border-color:rgba(255,179,71,.22);background:rgba(255,179,71,.08);color:var(--chalk);
+}
 body.pbp-open{overflow:hidden}
 @media (max-width:1100px){
   .recap{grid-template-columns:1fr}

@@ -1,10 +1,9 @@
 /* Fullscreen WebGL night card — stadium lights warm up over the type plate.
-   Ported from the night1-jamie-moyer reference; fonts are LINEUPZ's, and the
-   field bed samples grass-bg.png instead of procedural mow stripes. */
+   Ported from the night1-jamie-moyer reference; fonts are LINEUPZ's.
+   Field bed is solid black. */
 
 /* Hold through lamp cut-out; CSS handles the dissolve to the map. */
 const LOOP = 6.55;
-const GRASS_URL = '/grass-bg.png';
 
 const VS = `
 attribute vec2 aPos;
@@ -17,9 +16,7 @@ precision highp float;
 uniform vec2  uRes;
 uniform float uTime;
 uniform float uT;
-uniform float uGrassAspect;
 uniform sampler2D uTex;
-uniform sampler2D uGrass;
 
 const float PI = 3.14159265;
 
@@ -95,8 +92,6 @@ void main(){
   col += vec3(0.010,0.014,0.030) * fbm(p*1.4 + vec2(uTime*0.02, 0.0));
   col *= 1.0 - gm;
 
-  col += vec3(0.010,0.016,0.012) * gm;
-
   float bw = min(0.185, aspect*0.115);
   float bh = bw*0.44;
   vec2  cell = vec2(bw/6.0, bh/3.0);
@@ -152,19 +147,8 @@ void main(){
     bugs += step(0.90, br) * smoothstep(0.15,0.0,length(bf)) * en * exp(-length(p-C)*2.6);
   }
 
-  /* Field bed — grass-bg.png under the horizon, lit by the banks.
-     object-fit:cover so the photo isn't squashed into the short band. */
-  float fieldH = hy + 0.58;
-  vec2 fUV = vec2(p.x / max(aspect, 1e-3) * 0.5 + 0.5, sat((hy - p.y) / max(fieldH, 1e-3)));
-  float ba = aspect / max(fieldH, 1e-3);
-  float ta = max(uGrassAspect, 1e-3);
-  vec2 dest = vec2(ba, 1.0);
-  vec2 texSize = vec2(ta, 1.0);
-  float cover = max(dest.x / texSize.x, dest.y / texSize.y);
-  vec2 grassUV = (fUV * dest - 0.5 * dest) / (texSize * cover) + 0.5;
-  vec3 grass = pow(max(texture2D(uGrass, grassUV).rgb, 1e-4), vec3(1.25)) * 0.42;
-  col += gm * field * grass * 1.7;
-  col += gm * field * 0.05;
+  /* Field bed — solid black; lamp pools still skim the plane. */
+  col += gm * field * 0.06;
 
   col *= 1.0 - hous*0.80;
   col += fixtures;
@@ -260,15 +244,6 @@ function diamond(g, x, y, r) {
   g.fill();
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
 /**
  * Bind a WebGL night intro to a host element that contains a canvas.
  * Returns { ok, play({ kick, name }), stop }.
@@ -309,10 +284,7 @@ export function createNightIntro(host, canvas) {
   const uRes = gl.getUniformLocation(prog, 'uRes');
   const uTime = gl.getUniformLocation(prog, 'uTime');
   const uT = gl.getUniformLocation(prog, 'uT');
-  const uGrassAspect = gl.getUniformLocation(prog, 'uGrassAspect');
   const uTex = gl.getUniformLocation(prog, 'uTex');
-  const uGrass = gl.getUniformLocation(prog, 'uGrass');
-  gl.uniform1f(uGrassAspect, 16 / 9);
 
   const plateTex = gl.createTexture();
   gl.activeTexture(gl.TEXTURE0);
@@ -323,20 +295,6 @@ export function createNightIntro(host, canvas) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.uniform1i(uTex, 0);
-
-  const grassTex = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, grassTex);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  // 1x1 placeholder until grass.png loads
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-    new Uint8Array([28, 51, 20, 255]));
-  gl.uniform1i(uGrass, 1);
-  gl.activeTexture(gl.TEXTURE0);
 
   const tc = document.createElement('canvas');
   const tg = tc.getContext('2d');
@@ -429,14 +387,6 @@ export function createNightIntro(host, canvas) {
     buildPlate(w, h);
   }
 
-  let grassReady = loadImage(GRASS_URL).then((img) => {
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, grassTex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.uniform1f(uGrassAspect, (img.naturalWidth || img.width) / Math.max(1, img.naturalHeight || img.height));
-    gl.activeTexture(gl.TEXTURE0);
-  }).catch(() => {});
-
   const onResize = () => { if (running) resize(); };
   window.addEventListener('resize', onResize);
 
@@ -477,16 +427,14 @@ export function createNightIntro(host, canvas) {
     gl.uniform1f(uT, Math.max(0, Math.min(t, LOOP)));
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, plateTex);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, grassTex);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   async function play({ kick: k, name: n }) {
     kick = String(k || 'NIGHT 1').toUpperCase();
-    name = String(n || 'LINEUPZ').toUpperCase();
+    // Pitcher plate stays title case (catalog names); only the night kicker is capped.
+    name = String(n || 'Lineupz');
     stop();
-    await grassReady;
     resize();
     buildPlate(W, H);
     // Swap in webfonts if they land mid-loop without blocking the first frame.
